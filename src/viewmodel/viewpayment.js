@@ -1,7 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { supabaseRead } from '../model/supabaseclient.js';
-import { useSupabaseQuery } from './useSupabaseQuery.js';
+import { supabase } from '../model/supabaseclient.js';
 
 const STATUS_DISPLAY = {
   BILLING: 'Billing',
@@ -274,7 +273,7 @@ const resolveCurrentPeriodStatus = ({ amountDue, amountPaid, dueDate, overrideSt
     return 'PARTIALLY_PAID';
   }
 
-  return 'UNPAID';
+  return 'BILLING';
 };
 
 const inferDueDateFromBillingMonth = (billingMonth) => {
@@ -334,7 +333,7 @@ const resolveComputedStatus = ({ amountDue, amountPaid, dueDate, sourceStatus })
     if (dueDate && dueDate < getStartOfToday()) {
       return 'OVERDUE';
     }
-    return 'UNPAID';
+    return 'BILLING';
   }
 
   if (numericAmountPaid < numericAmountDue) {
@@ -506,10 +505,10 @@ const getApprovedStatus = (amountDue, amountPaid) => {
   if (numericAmountPaid > 0) {
     return 'PARTIALLY_PAID';
   }
-  return 'UNPAID';
+  return 'BILLING';
 };
 
-export async function createInitialBillingForTenant({ tenantId, billingMonth, amountDue }) {
+export async function createInitialBillingForTenant({ tenantId, billingMonth, amountDue, billingPeriodStart }) {
   const parsedTenantId = toTenantId(tenantId);
   const normalizedBillingMonth = normalizeBillingMonth(billingMonth);
 
@@ -520,7 +519,7 @@ export async function createInitialBillingForTenant({ tenantId, billingMonth, am
     throw new Error('Billing month is required.');
   }
 
-  const { data: existingRows, error: existingError } = await supabaseRead
+  const { data: existingRows, error: existingError } = await supabase
     .from('payments')
     .select('payment_id')
     .eq('tenant_id', parsedTenantId)
@@ -538,7 +537,7 @@ export async function createInitialBillingForTenant({ tenantId, billingMonth, am
     };
   }
 
-  const { data: tenantRow, error: tenantError } = await supabaseRead
+  const { data: tenantRow, error: tenantError } = await supabase
     .from('tenants')
     .select('tenant_id, room_id')
     .eq('tenant_id', parsedTenantId)
@@ -551,7 +550,7 @@ export async function createInitialBillingForTenant({ tenantId, billingMonth, am
     throw new Error('Tenant room information is missing. Cannot create billing.');
   }
 
-  const { data: roomRow, error: roomError } = await supabaseRead
+  const { data: roomRow, error: roomError } = await supabase
     .from('rooms')
     .select('room_id, monthly_rent')
     .eq('room_id', tenantRow.room_id)
@@ -566,6 +565,15 @@ export async function createInitialBillingForTenant({ tenantId, billingMonth, am
     throw new Error('Monthly rent is missing or invalid. Cannot create billing.');
   }
 
+  let payloadBillingStart = billingPeriodStart ? new Date(billingPeriodStart) : null;
+  let payloadBillingEnd = null;
+
+  if (payloadBillingStart && !isNaN(payloadBillingStart.getTime())) {
+    const dueDate = new Date(payloadBillingStart);
+    dueDate.setMonth(dueDate.getMonth() + 1);
+    payloadBillingEnd = dueDate;
+  }
+
   const payload = {
     tenant_id: parsedTenantId,
     billing_month: normalizedBillingMonth,
@@ -573,13 +581,15 @@ export async function createInitialBillingForTenant({ tenantId, billingMonth, am
     amount_paid: 0,
     balance: normalizedAmountDue,
     status: toDatabaseStatus('BILLING'),
-    payment_method: null,
+    payment_method: 'Over-the-Counter',
     payment_date: null,
     reference_no: null,
-    receipt_proof: null
+    receipt_proof: null,
+    billing_period_start: payloadBillingStart ? payloadBillingStart.toISOString().slice(0, 10) : null,
+    billing_period_end: payloadBillingEnd ? payloadBillingEnd.toISOString().slice(0, 10) : null
   };
 
-  const { data: insertedRow, error: insertError } = await supabaseRead.from('payments').insert(payload).select('*').single();
+  const { data: insertedRow, error: insertError } = await supabase.from('payments').insert(payload).select('*').single();
 
   if (insertError) {
     throw new Error(`Failed to create initial billing record: ${insertError.message}`);
@@ -611,7 +621,7 @@ export async function submitTenantUploadedPayment({
     throw new Error('Billing month is required.');
   }
 
-  const { data: paymentRow, error: paymentError } = await supabaseRead
+  const { data: paymentRow, error: paymentError } = await supabase
     .from('payments')
     .select('*')
     .eq('tenant_id', parsedTenantId)
@@ -639,7 +649,7 @@ export async function submitTenantUploadedPayment({
     notes: normalizeString(notes) || null
   };
 
-  const { data: updatedRow, error: updateError } = await supabaseRead
+  const { data: updatedRow, error: updateError } = await supabase
     .from('payments')
     .update(payload)
     .eq('payment_id', paymentRow.payment_id)
@@ -654,55 +664,137 @@ export async function submitTenantUploadedPayment({
 }
 
 export function usePayments() {
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [actionPaymentId, setActionPaymentId] = useState(null);
 
-  const fetchPayments = useCallback(async () => {
-    const { data: paymentRows, error: paymentError } = await supabaseRead
-      .from('payments')
-      .select(
-        `
-        *,
-        tenants (
-          tenant_id,
-          user_id,
-          move_in_date,
-          assigned_room,
-          room_id,
-          users (
+  const fetchPayments = useCallback(async (isRecursive = false) => {
+    if (isRecursive !== true) setLoading(true);
+    setError('');
+
+    try {
+      const { data: paymentRows, error: paymentError } = await supabase
+        .from('payments')
+        .select(
+          `
+          *,
+          tenants (
+            tenant_id,
             user_id,
-            first_name,
-            middle_name,
-            last_name
-          ),
-          rooms (
+            move_in_date,
+            assigned_room,
             room_id,
-            room_no,
-            monthly_rent
+            users (
+              user_id,
+              first_name,
+              middle_name,
+              last_name
+            ),
+            rooms (
+              room_id,
+              room_no,
+              monthly_rent
+            )
           )
+        `
         )
-      `
-      )
-      .order('payment_id', { ascending: false });
+        .order('payment_id', { ascending: false });
 
-    if (paymentError) {
-      throw new Error(`Failed to fetch payments: ${paymentError.message}`);
+      if (paymentError) {
+        throw new Error(`Failed to fetch payments: ${paymentError.message}`);
+      }
+
+      console.log('[payments] raw payments', paymentRows);
+
+      const enrichedRows = enrichPaymentRows({
+        paymentRows
+      });
+
+      console.log('[payments] enriched payments', enrichedRows);
+
+      let spawned = false;
+      const latestPerTenant = new Map();
+      enrichedRows.forEach(payment => {
+         if (!latestPerTenant.has(payment.tenant_id)) {
+            latestPerTenant.set(payment.tenant_id, payment);
+         }
+      });
+
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const spawnPromises = [];
+
+      for (const payment of latestPerTenant.values()) {
+         if (payment.billing_period_end && payment.status_normalized !== 'REJECTED') {
+            const endD = new Date(payment.billing_period_end);
+            endD.setHours(0,0,0,0);
+            
+            const isFullyPaid = payment.status_normalized === 'PAID';
+            const isExpired = endD < today;
+
+            if (isFullyPaid || isExpired) {
+               const startD = new Date(payment.billing_period_end);
+               startD.setDate(startD.getDate() + 1);
+               const nextBillingPeriodStart = startD.toISOString().slice(0, 10);
+               const endD2 = new Date(startD);
+               endD2.setMonth(endD2.getMonth() + 1);
+               const nextBillingPeriodEnd = endD2.toISOString().slice(0, 10);
+               
+               const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+               const currentMonthIndex = monthNames.findIndex(m => m.toLowerCase() === (payment.billing_month || '').toLowerCase());
+               let nextBillingMonth = monthNames[(currentMonthIndex + 1) % 12];
+               let nextBillingYear = currentMonthIndex === 11 ? Number(payment.billing_year) + 1 : Number(payment.billing_year);
+
+               const roomRent = toNumber(payment.room?.monthly_rent) || 0;
+               const oldBalance = isFullyPaid ? 0 : Math.max(Number(payment.amount_due || 0) - Number(payment.amount_paid || 0), 0);
+               const nextAmountDue = roomRent + oldBalance;
+
+               spawnPromises.push(
+                  supabase.from('payments').select('payment_id')
+                    .eq('tenant_id', payment.tenant_id).eq('billing_month', nextBillingMonth).eq('billing_year', nextBillingYear).limit(1)
+                    .then(({data}) => {
+                       if (!data || data.length === 0) {
+                          spawned = true;
+                          return supabase.from('payments').insert({
+                            tenant_id: payment.tenant_id,
+                            billing_month: nextBillingMonth,
+                            billing_year: nextBillingYear,
+                            amount_due: nextAmountDue,
+                            amount_paid: 0,
+                            balance: 0,
+                            payment_method: 'Over-the-Counter',
+                            status: toDatabaseStatus('BILLING'),
+                            billing_period_start: nextBillingPeriodStart,
+                            billing_period_end: nextBillingPeriodEnd
+                          });
+                       }
+                    })
+               );
+            }
+         }
+      }
+
+      await Promise.all(spawnPromises);
+
+      if (spawned && isRecursive !== true) {
+         return fetchPayments(true);
+      }
+
+      setPayments(enrichedRows);
+      return enrichedRows;
+    } catch (fetchError) {
+      setPayments([]);
+      setError(fetchError.message || 'Unable to load payments.');
+      return [];
+    } finally {
+      if (isRecursive !== true) setLoading(false);
     }
-
-    return enrichPaymentRows({
-      paymentRows
-    });
   }, []);
 
-  const {
-    data: payments,
-    loading,
-    error,
-    refetch: refreshPayments
-  } = useSupabaseQuery(fetchPayments, {
-    initialData: [],
-    deps: [fetchPayments],
-    errorMessage: 'Unable to load payments.'
-  });
+  useEffect(() => {
+    fetchPayments();
+  }, [fetchPayments]);
 
   const allPayments = useMemo(() => payments, [payments]);
 
@@ -740,9 +832,8 @@ export function usePayments() {
     const summaries = [];
 
     paymentsByTenant.forEach((ledger, tenantId) => {
-      const summary = buildTenantCurrentSummary(tenantId, ledger);
-      if (summary) {
-        summaries.push(summary);
+      if (ledger && ledger.length > 0) {
+        summaries.push(ledger[0]);
       }
     });
 
@@ -782,7 +873,7 @@ export function usePayments() {
 
       const totalRent = ledger.reduce((sum, payment) => sum + toNumber(payment.amount_due), 0);
       const totalPaid = ledger.reduce((sum, payment) => sum + toNumber(payment.amount_paid), 0);
-      const outstandingBalance = ledger.reduce((sum, payment) => sum + toNumber(payment.balance), 0);
+      const outstandingBalance = ledger.reduce((sum, payment) => sum + (toNumber(payment.amount_due) - toNumber(payment.amount_paid)), 0);
 
       return {
         totalRent,
@@ -801,6 +892,8 @@ export function usePayments() {
       }
 
       setActionPaymentId(parsedPaymentId);
+      setError('');
+
       try {
         const nextPayload = { ...payload };
         if (Object.prototype.hasOwnProperty.call(nextPayload, 'status')) {
@@ -812,18 +905,18 @@ export function usePayments() {
           }
         }
 
-        const { error: updateError } = await supabaseRead.from('payments').update(nextPayload).eq('payment_id', parsedPaymentId);
+        const { error: updateError } = await supabase.from('payments').update(nextPayload).eq('payment_id', parsedPaymentId);
 
         if (updateError) {
           throw new Error(`Failed to update payment: ${updateError.message}`);
         }
 
-        await refreshPayments();
+        await fetchPayments();
       } finally {
         setActionPaymentId(null);
       }
     },
-    [refreshPayments]
+    [fetchPayments]
   );
 
   const processPayment = useCallback(
@@ -862,10 +955,78 @@ export function usePayments() {
       const amountDue = toNumber(payment.amount_due);
       const amountPaid = toNumber(payment.amount_paid);
       const balance = calculateBalance(amountDue, amountPaid);
+      const newStatus = getApprovedStatus(amountDue, amountPaid);
+
+      if (newStatus === 'PAID') {
+        try {
+          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+          const currentMonthIndex = monthNames.findIndex(m => m.toLowerCase() === (payment.billing_month || '').toLowerCase());
+          
+          if (currentMonthIndex !== -1) {
+            const nextMonthIndex = (currentMonthIndex + 1) % 12;
+            const nextBillingMonth = monthNames[nextMonthIndex];
+            const nextBillingYear = currentMonthIndex === 11 ? Number(payment.billing_year) + 1 : Number(payment.billing_year);
+
+            let nextBillingPeriodStart = null;
+            let nextBillingPeriodEnd = null;
+
+            if (payment.billing_period_end) {
+              const startD = new Date(payment.billing_period_end);
+              if (!isNaN(startD.getTime())) {
+                startD.setDate(startD.getDate() + 1);
+                nextBillingPeriodStart = startD.toISOString().slice(0, 10);
+                
+                const endD = new Date(startD);
+                endD.setMonth(endD.getMonth() + 1);
+                nextBillingPeriodEnd = endD.toISOString().slice(0, 10);
+              }
+            } else if (payment.billing_period_start) {
+              const startD = new Date(payment.billing_period_start);
+              if (!isNaN(startD.getTime())) {
+                startD.setMonth(startD.getMonth() + 1);
+                startD.setDate(startD.getDate() + 1);
+                nextBillingPeriodStart = startD.toISOString().slice(0, 10);
+                
+                const endD = new Date(startD);
+                endD.setMonth(endD.getMonth() + 1);
+                nextBillingPeriodEnd = endD.toISOString().slice(0, 10);
+              }
+            }
+
+            const { data: existingRows } = await supabase
+              .from('payments')
+              .select('payment_id')
+              .eq('tenant_id', payment.tenant_id)
+              .eq('billing_month', nextBillingMonth)
+              .eq('billing_year', nextBillingYear)
+              .limit(1);
+
+            if (!existingRows || existingRows.length === 0) {
+              const nextAmountDue = toNumber(payment.room?.monthly_rent) || toNumber(payment.amount_due) || 0;
+              const nextPayload = {
+                tenant_id: payment.tenant_id,
+                billing_month: nextBillingMonth,
+                billing_year: nextBillingYear,
+                amount_due: nextAmountDue,
+                amount_paid: 0,
+                balance: 0,
+                payment_method: 'Over-the-Counter',
+                status: 'Billing',
+                billing_period_start: nextBillingPeriodStart,
+                billing_period_end: nextBillingPeriodEnd
+              };
+              
+              await supabase.from('payments').insert(nextPayload);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to auto-generate next billing period:', err);
+        }
+      }
 
       const payload = {
         balance,
-        status: toDatabaseStatus(getApprovedStatus(amountDue, amountPaid))
+        status: toDatabaseStatus(newStatus)
       };
 
       await updatePayment(payment.payment_id, payload);
@@ -901,12 +1062,12 @@ export function usePayments() {
     allPayments,
     tenantPayments,
     pendingValidationPayments,
+    refreshPayments: fetchPayments,
     updatePayment,
     processPayment,
     approvePayment,
     rejectPayment,
     getTenantLedger,
-    getTenantSummary,
-    refreshPayments
+    getTenantSummary
   };
 }

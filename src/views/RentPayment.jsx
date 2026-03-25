@@ -29,12 +29,11 @@ const BILLING_MONTH_OPTIONS = [
 
 const STATUS_OPTIONS = [
   { value: 'ALL', label: 'All Statuses' },
+  { value: 'BILLING', label: 'Billing' },
   { value: 'PAID', label: 'Paid' },
   { value: 'PARTIALLY_PAID', label: 'Partially Paid' },
-  { value: 'UNPAID', label: 'Unpaid' },
   { value: 'OVERDUE', label: 'Overdue' },
   { value: 'PENDING', label: 'Pending' },
-  { value: 'PENDING_VALIDATION', label: 'Pending Validation' },
   { value: 'REJECTED', label: 'Rejected' }
 ];
 
@@ -98,6 +97,25 @@ function ProofAttachment({ receiptProof, preview = false, onOpenImage = null, no
     </div>
   );
 }
+
+const getPaymentRowData = (payment) => {
+  const billingStartStr = payment.billing_period_start ? formatDate(payment.billing_period_start) : 'N/A';
+
+  let dueDateStr = 'N/A';
+  if (payment.billing_period_end) {
+    dueDateStr = formatDate(payment.billing_period_end);
+  } else if (payment.billing_period_start) {
+    const d = new Date(payment.billing_period_start);
+    if (!isNaN(d.getTime())) {
+      d.setMonth(d.getMonth() + 1);
+      dueDateStr = formatDate(d);
+    }
+  }
+
+  const balance = Number(payment.amount_due || 0) - Number(payment.amount_paid || 0);
+
+  return { billingStartStr, dueDateStr, balance };
+};
 
 export default function RentPayment() {
   const [activeTab, setActiveTab] = useState('payments');
@@ -203,15 +221,20 @@ export default function RentPayment() {
     [selectedTenantId, getTenantLedger]
   );
 
+  const historyLedger = useMemo(
+    () => selectedLedger.slice(1),
+    [selectedLedger]
+  );
+
   const selectedSummary = useMemo(
     () =>
       selectedTenantId
         ? getTenantSummary(selectedTenantId)
         : {
-            totalRent: 0,
-            totalPaid: 0,
-            outstandingBalance: 0
-          },
+          totalRent: 0,
+          totalPaid: 0,
+          outstandingBalance: 0
+        },
     [selectedTenantId, getTenantSummary]
   );
 
@@ -367,7 +390,9 @@ export default function RentPayment() {
                         <thead>
                           <tr>
                             <th>Tenant</th>
-                            <th>Billing Period</th>
+                            <th>Room</th>
+                            <th>Billing Start</th>
+                            <th>Due Date</th>
                             <th>Total Due</th>
                             <th>Amount Paid</th>
                             <th>Balance</th>
@@ -389,23 +414,29 @@ export default function RentPayment() {
                           )}
 
                           {!loading &&
-                            filteredTenantPayments.map((payment) => (
-                              <tr key={payment.tenant_id}>
-                                <td className="left-align">
-                                  {payment.tenant_name}
-                                  <br />
-                                  <small>{payment.tenant_code}</small>
-                                </td>
-                                <td>{payment.billing_period}</td>
-                                <td>{formatMoney(payment.amount_due)}</td>
-                                <td>{formatMoney(payment.amount_paid)}</td>
-                                <td>{formatMoney(payment.balance)}</td>
-                                <td>{formatPaymentStatus(payment.status_normalized)}</td>
-                                <td>
-                                  <button onClick={() => handleViewDetails(payment)}>View</button>
-                                </td>
-                              </tr>
-                            ))}
+                            filteredTenantPayments.map((payment) => {
+                              const { billingStartStr, dueDateStr, balance } = getPaymentRowData(payment);
+
+                              return (
+                                <tr key={payment.tenant_id}>
+                                  <td className="left-align">
+                                    {payment.tenant_name}
+                                    <br />
+                                    <small>{payment.tenant_code}</small>
+                                  </td>
+                                  <td>{payment.room_no}</td>
+                                  <td>{billingStartStr}</td>
+                                  <td>{dueDateStr}</td>
+                                  <td>{formatMoney(payment.amount_due)}</td>
+                                  <td>{formatMoney(payment.amount_paid)}</td>
+                                  <td>{formatMoney(balance)}</td>
+                                  <td>{formatPaymentStatus(payment.status_normalized)}</td>
+                                  <td>
+                                    <button onClick={() => handleViewDetails(payment)}>View</button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                         </tbody>
                       </table>
                     </div>
@@ -451,6 +482,7 @@ export default function RentPayment() {
                             <th>Balance</th>
                             <th>Mode of Payment</th>
                             <th>Proof of Payment</th>
+                            <th>Date Submitted</th>
                             <th>Status</th>
                             <th>Action</th>
                           </tr>
@@ -471,6 +503,7 @@ export default function RentPayment() {
                           {!loading &&
                             filteredPendingPayments.map((payment) => {
                               const rowUpdating = Number(actionPaymentId) === Number(payment.payment_id);
+                              const { balance } = getPaymentRowData(payment);
 
                               return (
                                 <tr key={payment.payment_id}>
@@ -482,7 +515,7 @@ export default function RentPayment() {
                                   <td>{payment.room_no}</td>
                                   <td>{formatMoney(payment.amount_due)}</td>
                                   <td>{formatMoney(payment.amount_paid)}</td>
-                                  <td>{formatMoney(payment.balance)}</td>
+                                  <td>{formatMoney(balance)}</td>
                                   <td>{payment.payment_method || '-'}</td>
                                   <td>
                                     <ProofAttachment
@@ -491,6 +524,7 @@ export default function RentPayment() {
                                       onOpenImage={handleOpenProofPreview}
                                     />
                                   </td>
+                                  <td>{payment.paid_date ? formatDate(payment.paid_date) : 'N/A'}</td>
                                   <td>{formatPaymentStatus(payment.status_normalized)}</td>
                                   <td>
                                     <div className="act-btn2">
@@ -561,8 +595,10 @@ export default function RentPayment() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Billing Period</th>
-                  <th>Due Date</th>
+
+                  <th>Billing Start</th>
+                  <th>Billing End</th>
+                  <th>Paid Date</th>
                   <th>Total Due</th>
                   <th>Amount Paid</th>
                   <th>Balance</th>
@@ -572,30 +608,36 @@ export default function RentPayment() {
                 </tr>
               </thead>
               <tbody>
-                {selectedLedger.length === 0 && (
+                {historyLedger.length === 0 && (
                   <tr>
-                    <td colSpan={8}>No billing records found for this tenant.</td>
+                    <td colSpan={9}>No payment history found for this tenant.</td>
                   </tr>
                 )}
 
-                {selectedLedger.map((payment) => (
-                  <tr key={payment.payment_id}>
-                    <td>{payment.billing_period}</td>
-                    <td>{formatDate(payment.due_date_resolved ?? payment.payment_date)}</td>
-                    <td>{formatMoney(payment.amount_due)}</td>
-                    <td>{formatMoney(payment.amount_paid)}</td>
-                    <td>{formatMoney(payment.balance)}</td>
-                    <td>{payment.payment_method || '-'}</td>
-                    <td>
-                      <ProofAttachment
-                        receiptProof={payment.receipt_proof}
-                        notes={payment.notes}
-                        onOpenImage={handleOpenProofPreview}
-                      />
-                    </td>
-                    <td>{formatPaymentStatus(payment.status_normalized)}</td>
-                  </tr>
-                ))}
+                {historyLedger.map((payment) => {
+                  const { billingStartStr, dueDateStr, balance } = getPaymentRowData(payment);
+
+                  return (
+                    <tr key={payment.payment_id}>
+
+                      <td>{billingStartStr}</td>
+                      <td>{dueDateStr}</td>
+                      <td>{payment.paid_date ? formatDate(payment.paid_date) : '-'}</td>
+                      <td>{formatMoney(payment.amount_due)}</td>
+                      <td>{formatMoney(payment.amount_paid)}</td>
+                      <td>{formatMoney(balance)}</td>
+                      <td>{payment.payment_method || '-'}</td>
+                      <td>
+                        <ProofAttachment
+                          receiptProof={payment.receipt_proof}
+                          notes={payment.notes}
+                          onOpenImage={handleOpenProofPreview}
+                        />
+                      </td>
+                      <td>{formatPaymentStatus(payment.status_normalized)}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

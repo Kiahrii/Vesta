@@ -345,6 +345,14 @@ const billingMonthFull = monthNames[now.getMonth()];
 const billingMonth = convertMonthToEnumFormat(billingMonthFull); // Convert to "March", "April", etc.
 const billingYear = now.getFullYear();
 
+  const billingPeriodStart = now.toISOString().slice(0, 10);
+  const bpDate = new Date(billingPeriodStart);
+  let billingPeriodEnd = null;
+  if (!isNaN(bpDate.getTime())) {
+    bpDate.setMonth(bpDate.getMonth() + 1);
+    billingPeriodEnd = bpDate.toISOString().slice(0, 10);
+  }
+
   const paymentRecord = {
     tenant_id: tenantData.tenant_id,
     billing_month: billingMonth,
@@ -353,7 +361,9 @@ const billingYear = now.getFullYear();
     amount_paid: 0,
     balance: 0,
     payment_method: 'Over-the-Counter',
-    status: 'Billing'
+    status: 'Billing',
+    billing_period_start: billingPeriodStart,
+    billing_period_end: billingPeriodEnd
   };
 
   const { error: paymentError } = await supabase.from('payments').insert(paymentRecord);
