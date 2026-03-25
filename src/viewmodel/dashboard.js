@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 
 import { supabaseRead } from '../model/supabaseclient.js';
-import { useSupabaseQuery } from './useSupabaseQuery.js';
+import { useSupabaseQuery } from 'viewmodel/useSupabaseQuery.js';
 
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
 const normalizeStatusValue = (status) => normalizeString(status).toUpperCase().replace(/\s+/g, '_');
