@@ -81,7 +81,7 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    base: API_URL,
+  base: process.env.NODE_ENV === 'production' ? '/' : API_URL,
     plugins: [react(), jsconfigPaths()],
   };
 });
