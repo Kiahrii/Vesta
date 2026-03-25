@@ -288,7 +288,6 @@ export default function PastTenants() {
                     <tr>
                       <th>Tenant ID</th>
                       <th>Name</th>
-                      <th>Room</th>
                       <th>Contact No.</th>
                       <th>Move-In Date</th>
                       <th>Move-Out Date</th>
@@ -320,7 +319,6 @@ export default function PastTenants() {
                         <tr key={tenant.id}>
                           <td>{formatTenantCode(tenant.id)}</td>
                           <td>{tenant.name}</td>
-                          <td>{tenant.room}</td>
                           <td>{tenant.contact}</td>
                           <td>{tenant.moveIn}</td>
                           <td>{tenant.moveOut}</td>
