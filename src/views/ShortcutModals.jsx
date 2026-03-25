@@ -335,6 +335,7 @@ export function AddRoomModal({ open, onClose, onSaved }) {
 
   const [error, setError] = useState({ field: '', message: '' });
   const [loading, setLoading] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
 
   useEffect(() => {
     return () => {

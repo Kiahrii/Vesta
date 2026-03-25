@@ -6,6 +6,7 @@ import MainCard from 'components/MainCard';
 import Modal from 'layout/Modal';
 import { OnTheCounter } from 'views/ShortcutModals';
 import { formatDate } from 'viewmodel/formatDate.js';
+import ViewModal from 'viewmodel/ViewModal';
 import { formatPaymentStatus, normalizeStatusValue, usePayments } from 'viewmodel/viewpayment.js';
 
 import 'assets/scss/apartment-page/rentPayment.scss';
@@ -112,9 +113,47 @@ const getPaymentRowData = (payment) => {
     }
   }
 
-  const balance = Number(payment.amount_due || 0) - Number(payment.amount_paid || 0);
+  const balance = Math.max(Number(payment.amount_due || 0) - Number(payment.amount_paid || 0), 0);
 
   return { billingStartStr, dueDateStr, balance };
+};
+
+const getDisplayedPaymentDate = (payment) => payment?.paid_date || payment?.payment_date || payment?.created_at || null;
+const getTenantRowKey = (payment) => payment?.tenant_id || payment?.tenant_code || payment?.tenant_name || payment?.payment_id;
+const getComparableTime = (value) => {
+  const date = value ? new Date(value) : null;
+  return Number.isNaN(date?.getTime()) ? 0 : date.getTime();
+};
+
+const isBetterTenantPayment = (candidate, current) => {
+  if (!current) {
+    return true;
+  }
+
+  const candidateStatus = normalizeStatusValue(candidate?.status_normalized || candidate?.status);
+  const currentStatus = normalizeStatusValue(current?.status_normalized || current?.status);
+  const candidateIsBilling = candidateStatus === 'BILLING';
+  const currentIsBilling = currentStatus === 'BILLING';
+
+  if (candidateIsBilling !== currentIsBilling) {
+    return !candidateIsBilling;
+  }
+
+  const candidateActivityTime = getComparableTime(
+    getDisplayedPaymentDate(candidate) ?? candidate?.billing_period_start ?? candidate?.billing_period_end
+  );
+  const currentActivityTime = getComparableTime(
+    getDisplayedPaymentDate(current) ?? current?.billing_period_start ?? current?.billing_period_end
+  );
+
+  if (candidateActivityTime !== currentActivityTime) {
+    return candidateActivityTime > currentActivityTime;
+  }
+
+  const candidateBillingTime = getComparableTime(candidate?.billing_period_start ?? candidate?.billing_period_end);
+  const currentBillingTime = getComparableTime(current?.billing_period_start ?? current?.billing_period_end);
+
+  return candidateBillingTime > currentBillingTime;
 };
 
 export default function RentPayment() {
@@ -129,6 +168,10 @@ export default function RentPayment() {
   const [proofPreviewOpen, setProofPreviewOpen] = useState(false);
   const [proofPreviewUrl, setProofPreviewUrl] = useState('');
   const [proofPreviewNotes, setProofPreviewNotes] = useState('');
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [approveTargetPayment, setApproveTargetPayment] = useState(null);
+  const [rejectTargetPayment, setRejectTargetPayment] = useState(null);
+  const [rejectNotes, setRejectNotes] = useState('');
 
   const {
     loading,
@@ -158,14 +201,8 @@ export default function RentPayment() {
   const filteredTenantPayments = useMemo(() => {
     const keyword = normalizeString(searchAllPayments).toLowerCase();
 
-    return tenantPayments.filter((payment) => {
-      const searchableText = [
-        payment.tenant_name,
-        payment.tenant_code,
-        payment.room_no,
-        payment.billing_period,
-        payment.display_status
-      ]
+    const matchingPayments = tenantPayments.filter((payment) => {
+      const searchableText = [payment.tenant_name, payment.tenant_code, payment.room_no, payment.billing_period, payment.display_status]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
@@ -175,7 +212,8 @@ export default function RentPayment() {
       }
 
       if (selectedBillingMonth !== 'ALL') {
-        const billingMonthText = `${normalizeString(payment.billing_month)} ${normalizeString(payment.billing_period)}`.toUpperCase();
+        const billingMonthText =
+          `${normalizeString(payment.billing_month_normalized || payment.billing_month)} ${normalizeString(payment.billing_period)}`.toUpperCase();
         if (!billingMonthText.includes(selectedBillingMonth)) {
           return false;
         }
@@ -189,6 +227,29 @@ export default function RentPayment() {
       }
 
       return true;
+    });
+
+    const tenantRows = matchingPayments.reduce((rowsByTenant, payment) => {
+      const tenantRowKey = getTenantRowKey(payment);
+      const currentRow = rowsByTenant.get(tenantRowKey);
+
+      if (isBetterTenantPayment(payment, currentRow)) {
+        rowsByTenant.set(tenantRowKey, payment);
+      }
+
+      return rowsByTenant;
+    }, new Map());
+
+    return [...tenantRows.values()].sort((left, right) => {
+      if (isBetterTenantPayment(left, right)) {
+        return -1;
+      }
+
+      if (isBetterTenantPayment(right, left)) {
+        return 1;
+      }
+
+      return 0;
     });
   }, [tenantPayments, searchAllPayments, selectedBillingMonth, selectedStatus]);
 
@@ -216,13 +277,10 @@ export default function RentPayment() {
     });
   }, [pendingValidationPayments, searchPendingPayments]);
 
-  const selectedLedger = useMemo(
-    () => (selectedTenantId ? getTenantLedger(selectedTenantId) : []),
-    [selectedTenantId, getTenantLedger]
-  );
+  const selectedLedger = useMemo(() => (selectedTenantId ? getTenantLedger(selectedTenantId) : []), [selectedTenantId, getTenantLedger]);
 
   const historyLedger = useMemo(
-    () => selectedLedger.slice(1),
+    () => selectedLedger.filter((payment) => normalizeStatusValue(payment.status_normalized || payment.status) !== 'BILLING'),
     [selectedLedger]
   );
 
@@ -231,10 +289,10 @@ export default function RentPayment() {
       selectedTenantId
         ? getTenantSummary(selectedTenantId)
         : {
-          totalRent: 0,
-          totalPaid: 0,
-          outstandingBalance: 0
-        },
+            totalDue: 0,
+            totalPaid: 0,
+            outstandingBalance: 0
+          },
     [selectedTenantId, getTenantSummary]
   );
 
@@ -266,40 +324,62 @@ export default function RentPayment() {
     setProofPreviewNotes('');
   };
 
-  const handleApprove = async (payment) => {
-    const tenantName = normalizeString(payment?.tenant_name) || 'this tenant';
-    const shouldApprove = window.confirm(`Approve payment for ${tenantName}?`);
-    if (!shouldApprove) {
+  const closeApproveModal = () => {
+    setApproveTargetPayment(null);
+  };
+
+  const closeRejectModal = () => {
+    setRejectTargetPayment(null);
+    setRejectNotes('');
+  };
+
+  const handleApprove = (payment) => {
+    setApproveTargetPayment(payment);
+  };
+
+  const confirmApprove = async () => {
+    if (!approveTargetPayment) {
       return;
     }
 
     try {
-      await approvePayment(payment);
-      alert('Payment approved successfully.');
+      const approvalResult = await approvePayment(approveTargetPayment);
+      setFeedbackMessage(
+        approvalResult?.createdNextBilling ? 'Payment approved. Next billing generated.' : 'Payment approved successfully.'
+      );
     } catch (approveError) {
-      alert(approveError.message || 'Failed to approve payment.');
+      setFeedbackMessage(approveError.message || 'Failed to approve payment.');
+    } finally {
+      closeApproveModal();
     }
   };
 
-  const handleReject = async (payment) => {
-    const tenantName = normalizeString(payment?.tenant_name) || 'this tenant';
-    const shouldReject = window.confirm(`Reject payment for ${tenantName}?`);
-    if (!shouldReject) {
+  const handleReject = (payment) => {
+    if (!payment) {
       return;
     }
 
-    const notes = window.prompt('Optional rejection note:', normalizeString(payment.notes));
-    if (notes === null) {
+    setRejectTargetPayment(payment);
+    setRejectNotes(normalizeString(payment.notes));
+  };
+
+  const confirmReject = async () => {
+    if (!rejectTargetPayment) {
       return;
     }
 
     try {
-      await rejectPayment(payment, notes);
-      alert('Payment rejected successfully.');
+      await rejectPayment(rejectTargetPayment, rejectNotes);
+      setFeedbackMessage('Payment rejected successfully.');
     } catch (rejectError) {
-      alert(rejectError.message || 'Failed to reject payment.');
+      setFeedbackMessage(rejectError.message || 'Failed to reject payment.');
+    } finally {
+      closeRejectModal();
     }
   };
+
+  const approveModalBusy = Number(actionPaymentId) === Number(approveTargetPayment?.payment_id);
+  const rejectModalBusy = Number(actionPaymentId) === Number(rejectTargetPayment?.payment_id);
 
   return (
     <>
@@ -394,8 +474,6 @@ export default function RentPayment() {
                             <th>Billing Start</th>
                             <th>Due Date</th>
                             <th>Total Due</th>
-                            <th>Amount Paid</th>
-                            <th>Balance</th>
                             <th>Status</th>
                             <th>Action</th>
                           </tr>
@@ -403,13 +481,13 @@ export default function RentPayment() {
                         <tbody>
                           {loading && (
                             <tr>
-                              <td colSpan={7}>Loading payments...</td>
+                              <td colSpan="9">Loading payments...</td>
                             </tr>
                           )}
 
                           {!loading && filteredTenantPayments.length === 0 && (
                             <tr>
-                              <td colSpan={7}>No payment records found.</td>
+                              <td colSpan="9">No payment records found.</td>
                             </tr>
                           )}
 
@@ -418,7 +496,7 @@ export default function RentPayment() {
                               const { billingStartStr, dueDateStr, balance } = getPaymentRowData(payment);
 
                               return (
-                                <tr key={payment.tenant_id}>
+                                <tr key={payment.payment_id}>
                                   <td className="left-align">
                                     {payment.tenant_name}
                                     <br />
@@ -428,8 +506,6 @@ export default function RentPayment() {
                                   <td>{billingStartStr}</td>
                                   <td>{dueDateStr}</td>
                                   <td>{formatMoney(payment.amount_due)}</td>
-                                  <td>{formatMoney(payment.amount_paid)}</td>
-                                  <td>{formatMoney(balance)}</td>
                                   <td>{formatPaymentStatus(payment.status_normalized)}</td>
                                   <td>
                                     <button onClick={() => handleViewDetails(payment)}>View</button>
@@ -477,9 +553,7 @@ export default function RentPayment() {
                           <tr>
                             <th>Tenant</th>
                             <th>Room</th>
-                            <th>Total Due</th>
                             <th>Amount Paid</th>
-                            <th>Balance</th>
                             <th>Mode of Payment</th>
                             <th>Proof of Payment</th>
                             <th>Date Submitted</th>
@@ -490,13 +564,13 @@ export default function RentPayment() {
                         <tbody>
                           {loading && (
                             <tr>
-                              <td colSpan={9}>Loading pending payments...</td>
+                              <td colSpan="10">Loading pending payments...</td>
                             </tr>
                           )}
 
                           {!loading && filteredPendingPayments.length === 0 && (
                             <tr>
-                              <td colSpan={9}>No pending payments for validation.</td>
+                              <td colSpan="10">No pending payments for validation.</td>
                             </tr>
                           )}
 
@@ -513,9 +587,7 @@ export default function RentPayment() {
                                     <small>{payment.tenant_code}</small>
                                   </td>
                                   <td>{payment.room_no}</td>
-                                  <td>{formatMoney(payment.amount_due)}</td>
                                   <td>{formatMoney(payment.amount_paid)}</td>
-                                  <td>{formatMoney(balance)}</td>
                                   <td>{payment.payment_method || '-'}</td>
                                   <td>
                                     <ProofAttachment
@@ -524,7 +596,7 @@ export default function RentPayment() {
                                       onOpenImage={handleOpenProofPreview}
                                     />
                                   </td>
-                                  <td>{payment.paid_date ? formatDate(payment.paid_date) : 'N/A'}</td>
+                                  <td>{getDisplayedPaymentDate(payment) ? formatDate(getDisplayedPaymentDate(payment)) : '-'}</td>
                                   <td>{formatPaymentStatus(payment.status_normalized)}</td>
                                   <td>
                                     <div className="act-btn2">
@@ -561,11 +633,11 @@ export default function RentPayment() {
         <div className="card-group">
           <div className="card">
             <div className="card-body">
-              <h5 className="card-title">Total Rent:</h5>
-              <p className="card-text">{formatMoney(selectedSummary.totalRent)}</p>
+              <h5 className="card-title">Total Due:</h5>
+              <p className="card-text">{formatMoney(selectedSummary.totalDue)}</p>
             </div>
             <div className="card-footer">
-              <small className="text-muted">Calculated from billing records</small>
+              <small className="text-muted">Calculated from amount_due</small>
             </div>
           </div>
 
@@ -585,7 +657,7 @@ export default function RentPayment() {
               <p className="card-text">{formatMoney(selectedSummary.outstandingBalance)}</p>
             </div>
             <div className="card-footer">
-              <small className="text-muted">Calculated from balances</small>
+              <small className="text-muted">Calculated from amount_due - amount_paid</small>
             </div>
           </div>
         </div>
@@ -595,13 +667,10 @@ export default function RentPayment() {
             <table className="table">
               <thead>
                 <tr>
-
                   <th>Billing Start</th>
                   <th>Billing End</th>
                   <th>Paid Date</th>
-                  <th>Total Due</th>
                   <th>Amount Paid</th>
-                  <th>Balance</th>
                   <th>Mode of Payment</th>
                   <th>Proof</th>
                   <th>Status</th>
@@ -610,7 +679,7 @@ export default function RentPayment() {
               <tbody>
                 {historyLedger.length === 0 && (
                   <tr>
-                    <td colSpan={9}>No payment history found for this tenant.</td>
+                    <td colSpan="9">No payment history found for this tenant.</td>
                   </tr>
                 )}
 
@@ -619,24 +688,17 @@ export default function RentPayment() {
 
                   return (
                     <tr key={payment.payment_id}>
-
                       <td>{billingStartStr}</td>
                       <td>{dueDateStr}</td>
-                      <td>{payment.paid_date ? formatDate(payment.paid_date) : '-'}</td>
-                      <td>{formatMoney(payment.amount_due)}</td>
+                      <td>{getDisplayedPaymentDate(payment) ? formatDate(getDisplayedPaymentDate(payment)) : '-'}</td>
                       <td>{formatMoney(payment.amount_paid)}</td>
-                      <td>{formatMoney(balance)}</td>
                       <td>{payment.payment_method || '-'}</td>
                       <td>
-                        <ProofAttachment
-                          receiptProof={payment.receipt_proof}
-                          notes={payment.notes}
-                          onOpenImage={handleOpenProofPreview}
-                        />
+                        <ProofAttachment receiptProof={payment.receipt_proof} notes={payment.notes} onOpenImage={handleOpenProofPreview} />
                       </td>
                       <td>{formatPaymentStatus(payment.status_normalized)}</td>
                     </tr>
-                  )
+                  );
                 })}
               </tbody>
             </table>
@@ -668,6 +730,59 @@ export default function RentPayment() {
       </Modal>
 
       <OnTheCounter open={payRent} onClose={() => setPayRent(false)} />
+      <ViewModal
+        open={Boolean(approveTargetPayment)}
+        message={`Approve payment for ${normalizeString(approveTargetPayment?.tenant_name) || 'this tenant'}?`}
+        showSpinner={false}
+        closeOnBackdrop
+        onClose={closeApproveModal}
+        autoClose={false}
+        actions={
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <button type="button" onClick={closeApproveModal} disabled={approveModalBusy}>
+              Cancel
+            </button>
+            <button type="button" onClick={confirmApprove} disabled={approveModalBusy}>
+              {approveModalBusy ? 'Processing...' : 'Approve'}
+            </button>
+          </div>
+        }
+      />
+      <ViewModal
+        open={Boolean(rejectTargetPayment)}
+        message={`Reject payment for ${normalizeString(rejectTargetPayment?.tenant_name) || 'this tenant'}?`}
+        showSpinner={false}
+        closeOnBackdrop
+        onClose={closeRejectModal}
+        autoClose={false}
+        actions={
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <textarea
+              value={rejectNotes}
+              onChange={(event) => setRejectNotes(event.target.value)}
+              placeholder="Optional rejection note"
+              rows={4}
+              disabled={rejectModalBusy}
+              style={{ width: '100%', resize: 'vertical' }}
+            />
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button type="button" onClick={closeRejectModal} disabled={rejectModalBusy}>
+                Cancel
+              </button>
+              <button type="button" onClick={confirmReject} disabled={rejectModalBusy}>
+                {rejectModalBusy ? 'Processing...' : 'Reject'}
+              </button>
+            </div>
+          </div>
+        }
+      />
+      <ViewModal
+        open={Boolean(feedbackMessage)}
+        message={feedbackMessage}
+        showSpinner={false}
+        onClose={() => setFeedbackMessage('')}
+        duration={2000}
+      />
     </>
   );
 }

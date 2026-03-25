@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-
 import { supabase } from '../model/supabaseclient.js';
 
 const STATUS_DISPLAY = {
@@ -14,19 +13,7 @@ const STATUS_DISPLAY = {
   REJECTED: 'Rejected'
 };
 
-const STATUS_DATABASE = {
-  BILLING: 'Billing',
-  UNPAID: 'Unpaid',
-  PARTIAL: 'Partially Paid',
-  PARTIALLY_PAID: 'Partially Paid',
-  PAID: 'Paid',
-  OVERDUE: 'Overdue',
-  PENDING: 'Pending',
-  PENDING_VALIDATION: 'Pending',
-  REJECTED: 'Rejected'
-};
-
-const MONTH_NAMES = [
+const BILLING_MONTH_NAMES = [
   'JANUARY',
   'FEBRUARY',
   'MARCH',
@@ -42,753 +29,458 @@ const MONTH_NAMES = [
 ];
 
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
-const normalizeBillingMonth = (value) => normalizeString(value).toUpperCase().replace(/\s+/g, '_');
 const toNumber = (value) => {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : 0;
-};
-const pickJoinedRow = (value) => (Array.isArray(value) ? value[0] ?? null : value ?? null);
-
-export const normalizeStatusValue = (status) => normalizeString(status).toUpperCase().replace(/\s+/g, '_');
-
-const toTitleCase = (value) =>
-  normalizeString(value)
-    .toLowerCase()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-
-export const formatPaymentStatus = (status) => {
-  const normalized = normalizeStatusValue(status);
-  const fallback = toTitleCase(normalized.replace(/_/g, ' '));
-  return STATUS_DISPLAY[normalized] || fallback || 'Unknown';
-};
-
-const toDatabaseStatus = (status) => {
-  const normalized = normalizeStatusValue(status);
-  if (!normalized) {
-    return null;
-  }
-
-  return STATUS_DATABASE[normalized] || toTitleCase(normalized.replace(/_/g, ' '));
-};
-
-export const formatBillingPeriod = (billingMonth) => {
-  const normalized = normalizeString(billingMonth);
-  if (!normalized) {
-    return 'N/A';
-  }
-
-  return toTitleCase(normalized.replace(/_/g, ' '));
-};
-
-const parseDate = (value) => {
-  if (!value) {
-    return null;
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return date;
-};
-
-const toStartOfDay = (value) => {
-  const date = value instanceof Date ? new Date(value) : parseDate(value);
-  if (!date) {
-    return null;
-  }
-
-  date.setHours(0, 0, 0, 0);
-  return date;
-};
-
-const formatLongDate = (value) => {
-  const date = value instanceof Date ? value : parseDate(value);
-  if (!date) {
-    return 'N/A';
-  }
-
-  return date.toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric'
-  });
-};
-
-const formatBillingPeriodRange = (startDate, endDate) => {
-  if (!startDate || !endDate) {
-    return 'N/A';
-  }
-
-  return `${formatLongDate(startDate)} - ${formatLongDate(endDate)}`;
-};
-
-const addMonthsSafely = (date, months) => {
-  const base = toStartOfDay(date);
-  if (!base || !Number.isFinite(months)) {
-    return null;
-  }
-
-  const target = new Date(base);
-  const dayOfMonth = target.getDate();
-  target.setDate(1);
-  target.setMonth(target.getMonth() + months);
-
-  const lastDayOfMonth = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-  target.setDate(Math.min(dayOfMonth, lastDayOfMonth));
-
-  return target;
-};
-
-const getBillingCycleIndex = (startDate, currentDate) => {
-  const start = toStartOfDay(startDate);
-  const current = toStartOfDay(currentDate);
-
-  if (!start || !current) {
-    return 0;
-  }
-
-  let months = (current.getFullYear() - start.getFullYear()) * 12 + (current.getMonth() - start.getMonth());
-  if (months < 0) {
-    return 0;
-  }
-
-  const candidate = addMonthsSafely(start, months);
-  if (candidate && current < candidate) {
-    months -= 1;
-  }
-
-  return Math.max(months, 0);
-};
-
-const resolveTenantStartDate = (tenant, ledger = []) => {
-  const tenantDate = parseDate(tenant?.move_in_date) ?? parseDate(tenant?.created_at);
-  if (tenantDate) {
-    return toStartOfDay(tenantDate);
-  }
-
-  const ledgerDates = (ledger ?? [])
-    .map((payment) => parseDate(payment?.payment_date) ?? parseDate(payment?.due_date_resolved) ?? parseDate(payment?.created_at))
-    .filter(Boolean)
-    .sort((a, b) => a.getTime() - b.getTime());
-
-  if (ledgerDates.length > 0) {
-    return toStartOfDay(ledgerDates[0]);
-  }
-
-  return getStartOfToday();
-};
-
-const resolveMonthlyRent = (ledger = [], room = null) => {
-  const roomRent = toNumber(room?.monthly_rent);
-  if (roomRent > 0) {
-    return roomRent;
-  }
-
-  const ledgerRent = (ledger ?? []).reduce((found, payment) => {
-    if (found > 0) {
-      return found;
-    }
-    const value = toNumber(payment?.amount_due);
-    return value > 0 ? value : 0;
-  }, 0);
-
-  return ledgerRent;
-};
-
-const sumTenantPayments = (ledger = []) =>
-  (ledger ?? []).reduce((sum, payment) => {
-    const status = normalizeStatusValue(payment?.status_normalized ?? payment?.status);
-    if (status === 'REJECTED') {
-      return sum;
-    }
-    return sum + toNumber(payment?.amount_paid);
-  }, 0);
-
-const resolveStatusOverrideForPeriod = (ledger, periodStart, periodEnd, periodMonthKey) => {
-  if (!Array.isArray(ledger) || ledger.length === 0) {
-    return null;
-  }
-
-  const startTime = periodStart ? periodStart.getTime() : null;
-  const endTime = periodEnd ? periodEnd.getTime() : null;
-
-  const candidates = ledger.filter((payment) => {
-    const status = normalizeStatusValue(payment?.status_normalized ?? payment?.status);
-    if (!isPendingStatus(status) && status !== 'REJECTED') {
-      return false;
-    }
-
-    const paymentDate = parseDate(payment?.payment_date);
-    if (paymentDate && startTime !== null && endTime !== null) {
-      const time = paymentDate.getTime();
-      return time >= startTime && time < endTime;
-    }
-
-    const billingMonth = normalizeBillingMonth(payment?.billing_month);
-    if (billingMonth && periodMonthKey) {
-      return billingMonth === periodMonthKey;
-    }
-
-    return false;
-  });
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  candidates.sort((a, b) => {
-    const dateA = parseDate(a?.payment_date)?.getTime() ?? 0;
-    const dateB = parseDate(b?.payment_date)?.getTime() ?? 0;
-    return dateB - dateA;
-  });
-
-  return normalizeStatusValue(candidates[0]?.status_normalized ?? candidates[0]?.status) || null;
-};
-
-const resolveCurrentPeriodStatus = ({ amountDue, amountPaid, dueDate, overrideStatus }) => {
-  const normalizedOverride = normalizeStatusValue(overrideStatus);
-  if (normalizedOverride) {
-    return normalizedOverride;
-  }
-
-  const numericAmountDue = toNumber(amountDue);
-  const numericAmountPaid = toNumber(amountPaid);
-  const balance = Math.max(numericAmountDue - numericAmountPaid, 0);
-
-  if (numericAmountDue <= 0) {
-    return 'PAID';
-  }
-
-  if (dueDate && toStartOfDay(dueDate) < getStartOfToday() && balance > 0) {
-    return 'OVERDUE';
-  }
-
-  if (balance <= 0) {
-    return 'PAID';
-  }
-
-  if (numericAmountPaid > 0) {
-    return 'PARTIALLY_PAID';
-  }
-
-  return 'BILLING';
-};
-
-const inferDueDateFromBillingMonth = (billingMonth) => {
-  const normalized = normalizeString(billingMonth);
-  if (!normalized) {
-    return null;
-  }
-
-  const plain = normalized.replace(/_/g, ' ').toUpperCase();
-
-  const yearMonthMatch = plain.match(/^(\d{4})[-\s/](\d{1,2})$/);
-  if (yearMonthMatch) {
-    const year = Number(yearMonthMatch[1]);
-    const month = Number(yearMonthMatch[2]);
-
-    if (year >= 2000 && month >= 1 && month <= 12) {
-      return new Date(year, month, 0);
-    }
-  }
-
-  const explicitDate = parseDate(`${plain} 01`);
-  if (explicitDate) {
-    return new Date(explicitDate.getFullYear(), explicitDate.getMonth() + 1, 0);
-  }
-
-  const monthIndex = MONTH_NAMES.indexOf(plain);
-  if (monthIndex === -1) {
-    return null;
-  }
-
-  const now = new Date();
-  const inferredYear = now.getMonth() >= monthIndex ? now.getFullYear() : now.getFullYear() - 1;
-  return new Date(inferredYear, monthIndex + 1, 0);
-};
-
-const resolveDueDate = (paymentRow) => parseDate(paymentRow?.due_date) ?? inferDueDateFromBillingMonth(paymentRow?.billing_month);
-
-const getStartOfToday = () => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today;
-};
-
-const calculateBalance = (amountDue, amountPaid) => Math.max(toNumber(amountDue) - toNumber(amountPaid), 0);
-const isPendingStatus = (status) => status === 'PENDING' || status === 'PENDING_VALIDATION';
-
-const resolveComputedStatus = ({ amountDue, amountPaid, dueDate, sourceStatus }) => {
-  const normalizedSource = normalizeStatusValue(sourceStatus);
-  if (isPendingStatus(normalizedSource) || normalizedSource === 'REJECTED') {
-    return normalizedSource;
-  }
-
-  const numericAmountDue = toNumber(amountDue);
-  const numericAmountPaid = toNumber(amountPaid);
-
-  if (numericAmountPaid <= 0) {
-    if (dueDate && dueDate < getStartOfToday()) {
-      return 'OVERDUE';
-    }
-    return 'BILLING';
-  }
-
-  if (numericAmountPaid < numericAmountDue) {
-    return 'PARTIALLY_PAID';
-  }
-
-  return 'PAID';
-};
-
-const buildTenantName = (tenant, user) => {
-  const directName =
-    normalizeString(tenant?.tenant_name) ||
-    normalizeString(tenant?.full_name) ||
-    normalizeString(tenant?.name);
-
-  if (directName) {
-    return directName;
-  }
-
-  const userFullName =
-    normalizeString(user?.full_name) ||
-    [normalizeString(user?.first_name), normalizeString(user?.middle_name), normalizeString(user?.last_name)]
-      .filter(Boolean)
-      .join(' ');
-
-  if (userFullName) {
-    return userFullName;
-  }
-
-  const tenantComposedName = [normalizeString(tenant?.first_name), normalizeString(tenant?.middle_name), normalizeString(tenant?.last_name)]
-    .filter(Boolean)
-    .join(' ');
-
-  return tenantComposedName || `Tenant #${tenant?.tenant_id ?? 'N/A'}`;
-};
-
-const buildRoomNumber = (tenant, room) => normalizeString(room?.room_no) || normalizeString(tenant?.assigned_room) || '-';
-
-const buildTenantCode = (tenantId) => `TN-${String(tenantId ?? '').padStart(3, '0')}`;
-
-const enrichPaymentRows = ({ paymentRows, tenantRows, userRows, roomRows }) => {
-  const hasLookupMaps = Array.isArray(tenantRows) || Array.isArray(userRows) || Array.isArray(roomRows);
-  const tenantMap = hasLookupMaps ? new Map((tenantRows ?? []).map((tenant) => [tenant.tenant_id, tenant])) : null;
-  const userMap = hasLookupMaps ? new Map((userRows ?? []).map((user) => [user.user_id, user])) : null;
-  const roomMap = hasLookupMaps ? new Map((roomRows ?? []).map((room) => [room.room_id, room])) : null;
-
-  return (paymentRows ?? []).map((payment) => {
-    const joinedTenant = pickJoinedRow(payment.tenants);
-    const tenant = tenantMap ? tenantMap.get(payment.tenant_id) ?? null : joinedTenant ?? null;
-    const joinedUser = pickJoinedRow(joinedTenant?.users);
-    const joinedRoom = pickJoinedRow(joinedTenant?.rooms);
-    const user = tenantMap ? (tenant?.user_id ? userMap.get(tenant.user_id) ?? null : null) : joinedUser ?? null;
-    const room = tenantMap ? (tenant?.room_id ? roomMap.get(tenant.room_id) ?? null : null) : joinedRoom ?? null;
-
-    const amountDue = toNumber(room?.monthly_rent ?? payment.amount_due);
-    const amountPaid = toNumber(payment.amount_paid);
-    const dueDate = resolveDueDate(payment);
-    const computedBalance = calculateBalance(amountDue, amountPaid);
-    const computedStatus = resolveComputedStatus({
-      amountDue,
-      amountPaid,
-      dueDate,
-      sourceStatus: payment.status
-    });
-    const sourceStatus = normalizeStatusValue(payment.status);
-    const currentStatus = sourceStatus || computedStatus;
-
-    return {
-      ...payment,
-      tenant,
-      user,
-      room,
-      tenant_name: buildTenantName(tenant, user),
-      tenant_code: buildTenantCode(payment.tenant_id),
-      room_no: buildRoomNumber(tenant, room),
-      amount_due: amountDue,
-      amount_paid: amountPaid,
-      balance: computedBalance,
-      computed_balance: computedBalance,
-      status_normalized: currentStatus,
-      computed_status: computedStatus,
-      display_status: formatPaymentStatus(currentStatus),
-      billing_period: formatBillingPeriod(payment.billing_month),
-      due_date_resolved: dueDate ? dueDate.toISOString().slice(0, 10) : null
-    };
-  });
-};
-
-const buildTenantCurrentSummary = (tenantId, ledger) => {
-  if (!Array.isArray(ledger) || ledger.length === 0) {
-    return null;
-  }
-
-  const template = ledger[0];
-  const tenant = template?.tenant ?? null;
-  const user = template?.user ?? null;
-  const room = template?.room ?? null;
-
-  const startDate = resolveTenantStartDate(tenant, ledger);
-  const today = getStartOfToday();
-  const monthlyRent = resolveMonthlyRent(ledger, room);
-  const totalPaid = sumTenantPayments(ledger);
-  const dateCycleIndex = getBillingCycleIndex(startDate, today);
-  const paidCycleIndex = monthlyRent > 0 ? Math.floor(totalPaid / monthlyRent) : 0;
-  const cycleIndex = Math.max(dateCycleIndex, paidCycleIndex);
-  const periodStart = addMonthsSafely(startDate, cycleIndex);
-  const periodEnd = addMonthsSafely(startDate, cycleIndex + 1);
-  const previousPeriodsTotal = monthlyRent * cycleIndex;
-  const previousUnpaid = Math.max(previousPeriodsTotal - totalPaid, 0);
-  const totalDue = Math.max(monthlyRent + previousUnpaid, 0);
-  const amountPaidCurrent = Math.max(totalPaid - previousPeriodsTotal, 0);
-  const amountPaid = Math.min(amountPaidCurrent, totalDue);
-  const balance = Math.max(totalDue - amountPaid, 0);
-
-  const periodMonth = periodStart ? MONTH_NAMES[periodStart.getMonth()] : null;
-  const normalizedPeriodMonth = normalizeBillingMonth(periodMonth);
-  const overrideStatus = resolveStatusOverrideForPeriod(ledger, periodStart, periodEnd, normalizedPeriodMonth);
-  const statusNormalized = resolveCurrentPeriodStatus({
-    amountDue: totalDue,
-    amountPaid,
-    dueDate: periodEnd,
-    overrideStatus
-  });
-
-  return {
-    ...template,
-    tenant,
-    user,
-    room,
-    tenant_id: tenantId,
-    amount_due: totalDue,
-    amount_paid: amountPaid,
-    balance,
-    computed_balance: balance,
-    status_normalized: statusNormalized,
-    computed_status: statusNormalized,
-    display_status: formatPaymentStatus(statusNormalized),
-    billing_period: formatBillingPeriodRange(periodStart, periodEnd),
-    billing_month: periodMonth || template?.billing_month,
-    billing_year: periodStart ? periodStart.getFullYear() : template?.billing_year,
-    due_date_resolved: periodEnd ? periodEnd.toISOString().slice(0, 10) : template?.due_date_resolved,
-    billing_period_start: periodStart ? periodStart.toISOString().slice(0, 10) : null,
-    billing_period_end: periodEnd ? periodEnd.toISOString().slice(0, 10) : null,
-    current_period_index: cycleIndex
-  };
-};
-
-const toTenantId = (value) => {
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  return Number.isFinite(parsed) ? parsed : 0;
 };
-
-const toReferenceNumber = (value) => {
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-
+const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value ?? {}, key);
+const toNullableNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const getApprovedStatus = (amountDue, amountPaid) => {
-  const numericAmountDue = toNumber(amountDue);
-  const numericAmountPaid = toNumber(amountPaid);
+export const normalizeStatusValue = (status) => normalizeString(status).toUpperCase().replace(/\s+/g, '_');
 
-  if (numericAmountPaid >= numericAmountDue) {
-    return 'PAID';
-  }
-  if (numericAmountPaid > 0) {
-    return 'PARTIALLY_PAID';
-  }
-  return 'BILLING';
+export const formatPaymentStatus = (status) => {
+  const normalized = normalizeStatusValue(status);
+  return STATUS_DISPLAY[normalized] || normalized || 'Unknown';
 };
 
-export async function createInitialBillingForTenant({ tenantId, billingMonth, amountDue, billingPeriodStart }) {
-  const parsedTenantId = toTenantId(tenantId);
-  const normalizedBillingMonth = normalizeBillingMonth(billingMonth);
+const parseDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? null : date;
+};
 
-  if (!parsedTenantId) {
-    throw new Error('A valid tenant id is required to create a billing record.');
-  }
-  if (!normalizedBillingMonth) {
-    throw new Error('Billing month is required.');
-  }
+const calculateBalance = (amountDue, amountPaid) => Math.max(toNumber(amountDue) - toNumber(amountPaid), 0);
 
-  const { data: existingRows, error: existingError } = await supabase
-    .from('payments')
-    .select('payment_id')
-    .eq('tenant_id', parsedTenantId)
-    .eq('billing_month', normalizedBillingMonth)
-    .limit(1);
-
-  if (existingError) {
-    throw new Error(`Failed to validate billing record uniqueness: ${existingError.message}`);
+const normalizeBillingMonthValue = (value) => {
+  const numericValue = Number(value);
+  if (Number.isInteger(numericValue) && numericValue >= 1 && numericValue <= 12) {
+    return BILLING_MONTH_NAMES[numericValue - 1];
   }
 
-  if ((existingRows ?? []).length > 0) {
-    return {
-      created: false,
-      payment_id: existingRows[0].payment_id
-    };
+  return normalizeString(value).toUpperCase().replace(/\s+/g, '_');
+};
+
+const formatBillingMonthValue = (value) => {
+  const normalized = normalizeBillingMonthValue(value);
+  if (!normalized) {
+    return '';
   }
 
-  const { data: tenantRow, error: tenantError } = await supabase
-    .from('tenants')
-    .select('tenant_id, room_id')
-    .eq('tenant_id', parsedTenantId)
-    .maybeSingle();
+  return normalized
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+};
 
-  if (tenantError) {
-    throw new Error(`Failed to fetch tenant information: ${tenantError.message}`);
-  }
-  if (!tenantRow?.room_id) {
-    throw new Error('Tenant room information is missing. Cannot create billing.');
-  }
+const buildBillingDatesFromParts = (billingMonth, billingYear) => {
+  const normalizedMonth = normalizeBillingMonthValue(billingMonth);
+  const yearValue = Number(billingYear);
+  const monthIndex = BILLING_MONTH_NAMES.indexOf(normalizedMonth);
 
-  const { data: roomRow, error: roomError } = await supabase
-    .from('rooms')
-    .select('room_id, monthly_rent')
-    .eq('room_id', tenantRow.room_id)
-    .maybeSingle();
-
-  if (roomError) {
-    throw new Error(`Failed to fetch room rental details: ${roomError.message}`);
+  if (monthIndex < 0 || !Number.isInteger(yearValue)) {
+    return { start: null, end: null };
   }
 
-  const normalizedAmountDue = toNumber(roomRow?.monthly_rent ?? amountDue);
-  if (normalizedAmountDue <= 0) {
-    throw new Error('Monthly rent is missing or invalid. Cannot create billing.');
-  }
+  const startDate = new Date(Date.UTC(yearValue, monthIndex, 1));
+  const endDate = new Date(Date.UTC(yearValue, monthIndex + 1, 0));
 
-  let payloadBillingStart = billingPeriodStart ? new Date(billingPeriodStart) : null;
-  let payloadBillingEnd = null;
-
-  if (payloadBillingStart && !isNaN(payloadBillingStart.getTime())) {
-    const dueDate = new Date(payloadBillingStart);
-    dueDate.setMonth(dueDate.getMonth() + 1);
-    payloadBillingEnd = dueDate;
-  }
-
-  const payload = {
-    tenant_id: parsedTenantId,
-    billing_month: normalizedBillingMonth,
-    amount_due: normalizedAmountDue,
-    amount_paid: 0,
-    balance: normalizedAmountDue,
-    status: toDatabaseStatus('BILLING'),
-    payment_method: 'Over-the-Counter',
-    payment_date: null,
-    reference_no: null,
-    receipt_proof: null,
-    billing_period_start: payloadBillingStart ? payloadBillingStart.toISOString().slice(0, 10) : null,
-    billing_period_end: payloadBillingEnd ? payloadBillingEnd.toISOString().slice(0, 10) : null
+  return {
+    start: startDate.toISOString().slice(0, 10),
+    end: endDate.toISOString().slice(0, 10)
   };
+};
 
-  const { data: insertedRow, error: insertError } = await supabase.from('payments').insert(payload).select('*').single();
+const buildBillingPeriodLabel = ({ billingMonth, billingYear, billingPeriodStart }) => {
+  const monthLabel = formatBillingMonthValue(billingMonth);
+  if (monthLabel && billingYear) {
+    return `${monthLabel} ${billingYear}`;
+  }
 
-  if (insertError) {
-    throw new Error(`Failed to create initial billing record: ${insertError.message}`);
+  const startDate = parseDate(billingPeriodStart);
+  if (!startDate) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    year: 'numeric'
+  }).format(startDate);
+};
+
+const buildTenantName = (tenant, user) => {
+  // Check if tenant has a name directly
+  const directName = normalizeString(tenant?.tenant_name);
+  if (directName) return directName;
+  
+  // Build name from user's first, middle, last names
+  if (user) {
+    const firstName = normalizeString(user.first_name);
+    const middleName = normalizeString(user.middle_name);
+    const lastName = normalizeString(user.last_name);
+    
+    const nameParts = [];
+    if (firstName) nameParts.push(firstName);
+    if (middleName) nameParts.push(middleName);
+    if (lastName) nameParts.push(lastName);
+    
+    if (nameParts.length > 0) {
+      return nameParts.join(' ');
+    }
+  }
+  
+  // Fallback to tenant ID
+  return `Tenant #${tenant?.tenant_id ?? 'N/A'}`;
+};
+
+const buildRoomNumber = (tenant, room) => {
+  if (room?.room_no && normalizeString(room.room_no)) {
+    return normalizeString(room.room_no);
+  }
+  if (tenant?.assigned_room && normalizeString(tenant.assigned_room)) {
+    return normalizeString(tenant.assigned_room);
+  }
+  return '-';
+};
+
+const buildTenantCode = (tenantId) => `TN-${String(tenantId ?? '').padStart(3, '0')}`;
+
+const buildBillingTemplateKeys = (payment) => {
+  const tenantId = toNullableNumber(payment?.tenant_id);
+  if (!tenantId) {
+    return [];
+  }
+
+  const keys = [];
+  const billingId = toNullableNumber(payment?.billing_id);
+  const billingMonth = normalizeBillingMonthValue(payment?.billing_month);
+  const billingYear = Number(payment?.billing_year);
+
+  if (billingId) {
+    keys.push(`billing:${tenantId}:${billingId}`);
+  }
+
+  if (billingMonth && Number.isInteger(billingYear)) {
+    keys.push(`period:${tenantId}:${billingYear}:${billingMonth}`);
+  }
+
+  if (payment?.billing_period_start && payment?.billing_period_end) {
+    keys.push(`range:${tenantId}:${payment.billing_period_start}:${payment.billing_period_end}`);
+  }
+
+  if (payment?.billing_period_start) {
+    keys.push(`start:${tenantId}:${payment.billing_period_start}`);
+  }
+
+  return keys;
+};
+
+const resolveRawStatus = ({ amountDue, amountPaid, dueDate, sourceStatus }) => {
+  const normalizedSource = normalizeStatusValue(sourceStatus);
+  if (normalizedSource === 'PENDING' || normalizedSource === 'PENDING_VALIDATION' || normalizedSource === 'REJECTED') {
+    return normalizedSource;
+  }
+
+  const balance = calculateBalance(amountDue, amountPaid);
+  if (balance <= 0 && toNumber(amountDue) > 0) return 'Paid';
+  if (toNumber(amountPaid) > 0) return 'Partially Paid';
+  if (dueDate && new Date(dueDate) < new Date() && balance > 0) return 'Overdue';
+  return 'Billing';
+};
+
+const getApprovedDatabaseStatus = (balance) => (balance <= 0 ? 'Paid' : 'Partially Paid');
+
+const getPaymentSortTime = (payment) =>
+  parseDate(payment?.paid_date ?? payment?.payment_date ?? payment?.created_at ?? payment?.billing_period_end ?? payment?.billing_period_start)
+    ?.getTime() ?? 0;
+
+const getLedgerSortTime = (payment) =>
+  parseDate(payment?.billing_period_start ?? payment?.billing_period_end ?? payment?.paid_date ?? payment?.payment_date ?? payment?.created_at)
+    ?.getTime() ?? 0;
+
+const getMonthYearFromDate = (value) => {
+  const date = parseDate(value);
+  if (!date) {
+    return { billingMonth: '', billingYear: null };
   }
 
   return {
-    created: true,
-    payment: insertedRow
+    billingMonth: BILLING_MONTH_NAMES[date.getMonth()] || '',
+    billingYear: date.getFullYear()
   };
-}
+};
 
-export async function submitTenantUploadedPayment({
-  tenantId,
-  billingMonth,
-  amountPaid,
-  paymentMethod,
-  paymentDate,
-  referenceNo,
-  receiptProof,
-  notes
-}) {
-  const parsedTenantId = toTenantId(tenantId);
-  const normalizedBillingMonth = normalizeBillingMonth(billingMonth);
-
-  if (!parsedTenantId) {
-    throw new Error('A valid tenant id is required.');
-  }
-  if (!normalizedBillingMonth) {
-    throw new Error('Billing month is required.');
+const buildLedgerGroupKey = (payment) => {
+  const tenantId = toNullableNumber(payment?.tenant_id);
+  const tenantKey = tenantId ? `tenant:${tenantId}|` : '';
+  const billingMonth = normalizeBillingMonthValue(payment?.billing_month_normalized || payment?.billing_month);
+  if (payment?.billing_id) {
+    return `${tenantKey}billing:${payment.billing_id}`;
   }
 
-  const { data: paymentRow, error: paymentError } = await supabase
-    .from('payments')
-    .select('*')
-    .eq('tenant_id', parsedTenantId)
-    .eq('billing_month', normalizedBillingMonth)
-    .maybeSingle();
+  const derivedBillingPeriod = getMonthYearFromDate(
+    payment?.billing_period_start ?? payment?.billing_period_end ?? payment?.paid_date ?? payment?.payment_date ?? payment?.created_at
+  );
+  const effectiveBillingMonth = billingMonth || derivedBillingPeriod.billingMonth;
+  const effectiveBillingYear = payment?.billing_year ?? derivedBillingPeriod.billingYear;
 
-  if (paymentError) {
-    throw new Error(`Failed to locate billing row for payment upload: ${paymentError.message}`);
-  }
-  if (!paymentRow) {
-    throw new Error('No billing row found for this tenant and month.');
+  if (effectiveBillingMonth && effectiveBillingYear) {
+    return `${tenantKey}period:${effectiveBillingYear}:${effectiveBillingMonth}`;
   }
 
-  const normalizedAmountPaid = Math.max(0, toNumber(amountPaid));
-  const normalizedAmountDue = toNumber(paymentRow.amount_due);
+  if (payment?.billing_period_start && payment?.billing_period_end) {
+    return `${tenantKey}range:${payment.billing_period_start}:${payment.billing_period_end}`;
+  }
 
-  const payload = {
-    amount_paid: normalizedAmountPaid,
-    balance: calculateBalance(normalizedAmountDue, normalizedAmountPaid),
-    payment_method: normalizeString(paymentMethod) || null,
-    payment_date: normalizeString(paymentDate) || new Date().toISOString().slice(0, 10),
-    reference_no: toReferenceNumber(referenceNo),
-    receipt_proof: normalizeString(receiptProof) || null,
-    status: toDatabaseStatus('PENDING'),
-    notes: normalizeString(notes) || null
+  if (payment?.billing_period_start) {
+    return `${tenantKey}start:${payment.billing_period_start}`;
+  }
+
+  return `${tenantKey}payment:${payment?.payment_id ?? 'unknown'}`;
+};
+
+const isTransactionRow = (payment) => {
+  const status = normalizeStatusValue(payment?.status_normalized || payment?.status);
+
+  return (
+    toNumber(payment?.amount_paid) > 0 &&
+    (
+      Boolean(normalizeString(payment?.payment_method)) ||
+      Boolean(normalizeString(payment?.receipt_proof)) ||
+      Boolean(normalizeString(payment?.reference_no)) ||
+      Boolean(parseDate(payment?.paid_date ?? payment?.payment_date)) ||
+      status === 'PENDING' ||
+      status === 'PENDING_VALIDATION' ||
+      status === 'REJECTED'
+    )
+  );
+};
+
+const resolvePaymentAmountDue = (payment) => {
+  const billingDue = toNumber(payment?.billing_ledger?.amount_due);
+  if (billingDue > 0) {
+    return billingDue;
+  }
+
+  const rowDue = toNumber(payment?.amount_due);
+  if (!isTransactionRow(payment) && rowDue > 0) {
+    return rowDue;
+  }
+
+  const roomDue = toNumber(payment?.room?.monthly_rent);
+  if (roomDue > 0) {
+    return roomDue;
+  }
+
+  return rowDue;
+};
+
+const buildLedgerEntry = (payments) => {
+  const sortedPayments = [...payments].sort((a, b) => getPaymentSortTime(b) - getPaymentSortTime(a));
+  const latestPayment = sortedPayments[0] ?? null;
+  const latestTransaction = sortedPayments.find((payment) => isTransactionRow(payment)) ?? latestPayment;
+  const totalDue = payments.reduce((highest, payment) => Math.max(highest, resolvePaymentAmountDue(payment)), 0);
+  const transactionRows = payments.filter((payment) => isTransactionRow(payment));
+  const totalPaid =
+    transactionRows.length > 0
+      ? transactionRows.reduce((sum, payment) => sum + toNumber(payment.amount_paid), 0)
+      : payments.reduce((highest, payment) => Math.max(highest, toNumber(payment.amount_paid)), 0);
+  const balance = calculateBalance(totalDue, totalPaid);
+  const statusSource = latestTransaction ?? latestPayment;
+  const statusNormalized = resolveRawStatus({
+    amountDue: totalDue,
+    amountPaid: totalPaid,
+    dueDate: parseDate(latestPayment?.billing_period_end ?? latestTransaction?.billing_period_end),
+    sourceStatus: statusSource?.status || latestPayment?.status
+  });
+
+  return {
+    ...latestPayment,
+    amount_due: totalDue,
+    amount_paid: totalPaid,
+    balance,
+    payment_method: latestTransaction?.payment_method || latestPayment?.payment_method || null,
+    receipt_proof: latestTransaction?.receipt_proof || latestPayment?.receipt_proof || null,
+    notes: latestTransaction?.notes || latestPayment?.notes || null,
+    payment_date: latestTransaction?.payment_date || latestPayment?.payment_date || null,
+    paid_date: latestTransaction?.paid_date || latestPayment?.paid_date || null,
+    reference_no: latestTransaction?.reference_no || latestPayment?.reference_no || null,
+    status: statusSource?.status || latestPayment?.status || '',
+    status_normalized: statusNormalized,
+    display_status: formatPaymentStatus(statusNormalized)
   };
+};
 
-  const { data: updatedRow, error: updateError } = await supabase
-    .from('payments')
-    .update(payload)
-    .eq('payment_id', paymentRow.payment_id)
-    .select('*')
-    .maybeSingle();
+const buildLedgerEntries = (payments) => {
+  const ledgerGroups = payments.reduce((groups, payment) => {
+    const groupKey = buildLedgerGroupKey(payment);
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, []);
+    }
 
-  if (updateError) {
-    throw new Error(`Failed to update payment upload: ${updateError.message}`);
-  }
+    groups.get(groupKey).push(payment);
+    return groups;
+  }, new Map());
 
-  return updatedRow;
-}
+  return [...ledgerGroups.values()]
+    .map((groupedPayments) => buildLedgerEntry(groupedPayments))
+    .sort((a, b) => getLedgerSortTime(b) - getLedgerSortTime(a));
+};
 
 export function usePayments() {
-  const [payments, setPayments] = useState([]);
+  const [allPayments, setAllPayments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [actionPaymentId, setActionPaymentId] = useState(null);
 
-  const fetchPayments = useCallback(async (isRecursive = false) => {
-    if (isRecursive !== true) setLoading(true);
+  const fetchPayments = useCallback(async () => {
+    setLoading(true);
     setError('');
 
     try {
-      const { data: paymentRows, error: paymentError } = await supabase
-        .from('payments')
-        .select(
-          `
-          *,
-          tenants (
-            tenant_id,
-            user_id,
-            move_in_date,
-            assigned_room,
-            room_id,
-            users (
-              user_id,
-              first_name,
-              middle_name,
-              last_name
-            ),
-            rooms (
-              room_id,
-              room_no,
-              monthly_rent
-            )
-          )
-        `
-        )
-        .order('payment_id', { ascending: false });
+      const { data: paymentRows, error: paymentError } = await supabase.from('payments').select('*').order('payment_id', { ascending: false });
 
-      if (paymentError) {
-        throw new Error(`Failed to fetch payments: ${paymentError.message}`);
+      if (paymentError) throw new Error(paymentError.message);
+
+      const tenantIds = [...new Set((paymentRows || []).map((payment) => payment?.tenant_id).filter(Boolean))];
+      const billingIds = [...new Set((paymentRows || []).map((payment) => payment?.billing_id).filter(Boolean))];
+
+      let tenantRows = [];
+      if (tenantIds.length > 0) {
+        const { data: tenantsData, error: tenantsError } = await supabase.from('tenants').select('*').in('tenant_id', tenantIds);
+        if (tenantsError) {
+          throw new Error(`Failed to load tenants: ${tenantsError.message}`);
+        }
+        tenantRows = tenantsData || [];
       }
 
-      console.log('[payments] raw payments', paymentRows);
+      const userIds = [...new Set(tenantRows.map((tenant) => tenant?.user_id).filter(Boolean))];
+      const roomIds = [...new Set(tenantRows.map((tenant) => tenant?.room_id).filter(Boolean))];
 
-      const enrichedRows = enrichPaymentRows({
-        paymentRows
+      const [usersResult, roomsResult] = await Promise.all([
+        userIds.length > 0 ? supabase.from('users').select('user_id, first_name, middle_name, last_name').in('user_id', userIds) : Promise.resolve({ data: [], error: null }),
+        roomIds.length > 0 ? supabase.from('rooms').select('room_id, room_no, monthly_rent').in('room_id', roomIds) : Promise.resolve({ data: [], error: null })
+      ]);
+
+      if (usersResult.error) {
+        throw new Error(`Failed to load users: ${usersResult.error.message}`);
+      }
+
+      if (roomsResult.error) {
+        throw new Error(`Failed to load rooms: ${roomsResult.error.message}`);
+      }
+
+      let billingRows = [];
+      if (billingIds.length > 0) {
+        const { data: billingData, error: billingError } = await supabase.from('billing_ledger').select('*').in('billing_id', billingIds);
+        if (billingError) {
+          console.warn('Unable to load billing ledger rows for payments:', billingError.message);
+        } else {
+          billingRows = billingData || [];
+        }
+      }
+
+      const tenantMap = new Map(tenantRows.map((tenant) => [tenant.tenant_id, tenant]));
+      const userMap = new Map((usersResult.data || []).map((user) => [user.user_id, user]));
+      const roomMap = new Map((roomsResult.data || []).map((room) => [room.room_id, room]));
+      const billingMap = new Map(billingRows.map((billing) => [billing.billing_id, billing]));
+      const billingTemplateMap = (paymentRows || []).reduce((map, payment) => {
+        if (normalizeStatusValue(payment?.status) !== 'BILLING') {
+          return map;
+        }
+
+        buildBillingTemplateKeys(payment).forEach((key) => {
+          if (!map.has(key)) {
+            map.set(key, payment);
+          }
+        });
+
+        return map;
+      }, new Map());
+
+      const transformedPayments = (paymentRows || []).map((payment) => {
+        const tenant = tenantMap.get(payment?.tenant_id) ?? null;
+        const user = tenant?.user_id ? userMap.get(tenant.user_id) ?? null : null;
+        const room = tenant?.room_id ? roomMap.get(tenant.room_id) ?? null : null;
+        const billing = payment?.billing_id ? billingMap.get(payment.billing_id) ?? null : null;
+        const billingTemplate =
+          buildBillingTemplateKeys(payment).reduce((foundTemplate, key) => foundTemplate ?? billingTemplateMap.get(key) ?? null, null);
+
+        const billingMonthRaw = payment?.billing_month ?? billingTemplate?.billing_month ?? billing?.billing_month ?? null;
+        const billingYear = payment?.billing_year ?? billingTemplate?.billing_year ?? billing?.billing_year ?? null;
+        const derivedBillingDates = buildBillingDatesFromParts(billingMonthRaw, billingYear);
+        const billingPeriodStart = payment?.billing_period_start ?? billingTemplate?.billing_period_start ?? derivedBillingDates.start;
+        const billingPeriodEnd = payment?.billing_period_end ?? billingTemplate?.billing_period_end ?? billing?.due_date ?? derivedBillingDates.end;
+        const paymentDate = payment?.paid_date ?? payment?.payment_date ?? payment?.created_at ?? null;
+        const amountDue = resolvePaymentAmountDue({
+          ...payment,
+          billing_ledger: billing,
+          room
+        });
+        const amountPaid = toNumber(payment?.amount_paid ?? billing?.amount_paid);
+        const balance = calculateBalance(amountDue, amountPaid);
+        const dueDate = parseDate(billingPeriodEnd);
+        const rawStatus = payment?.status ?? billing?.status ?? '';
+        const statusNormalized = resolveRawStatus({
+          amountDue,
+          amountPaid,
+          dueDate,
+          sourceStatus: rawStatus
+        });
+        const tenantId = toNullableNumber(payment?.tenant_id ?? tenant?.tenant_id);
+        const billingMonthLabel = formatBillingMonthValue(billingMonthRaw);
+
+        return {
+          ...payment,
+          tenant: tenant ? { ...tenant, user, room } : null,
+          user,
+          room,
+          billing_ledger: billing,
+          payment_id: payment.payment_id,
+          billing_id: payment?.billing_id ?? billing?.billing_id ?? null,
+          tenant_id: tenantId,
+          tenant_name: buildTenantName(tenant, user),
+          tenant_code: buildTenantCode(tenantId),
+          room_no: buildRoomNumber(tenant, room),
+          amount_due: amountDue,
+          amount_paid: amountPaid,
+          balance,
+          status: rawStatus,
+          status_normalized: statusNormalized,
+          display_status: formatPaymentStatus(statusNormalized),
+          payment_method: payment.payment_method,
+          receipt_proof: payment.receipt_proof,
+          notes: payment.notes,
+          payment_date: paymentDate,
+          paid_date: paymentDate,
+          billing_period_start: billingPeriodStart,
+          billing_period_end: billingPeriodEnd,
+          billing_month: billingMonthLabel || payment?.billing_month || billingMonthRaw,
+          billing_month_normalized: normalizeBillingMonthValue(billingMonthRaw),
+          billing_year: billingYear,
+          billing_period: buildBillingPeriodLabel({
+            billingMonth: billingMonthRaw,
+            billingYear,
+            billingPeriodStart
+          }),
+          reference_no: payment.reference_no,
+          source_date_column: hasOwn(payment, 'paid_date') ? 'paid_date' : hasOwn(payment, 'payment_date') ? 'payment_date' : null,
+          source_has_balance_field: hasOwn(payment, 'balance'),
+          source_has_notes_field: hasOwn(payment, 'notes')
+        };
       });
 
-      console.log('[payments] enriched payments', enrichedRows);
-
-      let spawned = false;
-      const latestPerTenant = new Map();
-      enrichedRows.forEach(payment => {
-         if (!latestPerTenant.has(payment.tenant_id)) {
-            latestPerTenant.set(payment.tenant_id, payment);
-         }
-      });
-
-      const today = new Date();
-      today.setHours(0,0,0,0);
-      const spawnPromises = [];
-
-      for (const payment of latestPerTenant.values()) {
-         if (payment.billing_period_end && payment.status_normalized !== 'REJECTED') {
-            const endD = new Date(payment.billing_period_end);
-            endD.setHours(0,0,0,0);
-            
-            const isFullyPaid = payment.status_normalized === 'PAID';
-            const isExpired = endD < today;
-
-            if (isFullyPaid || isExpired) {
-               const startD = new Date(payment.billing_period_end);
-               startD.setDate(startD.getDate() + 1);
-               const nextBillingPeriodStart = startD.toISOString().slice(0, 10);
-               const endD2 = new Date(startD);
-               endD2.setMonth(endD2.getMonth() + 1);
-               const nextBillingPeriodEnd = endD2.toISOString().slice(0, 10);
-               
-               const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-               const currentMonthIndex = monthNames.findIndex(m => m.toLowerCase() === (payment.billing_month || '').toLowerCase());
-               let nextBillingMonth = monthNames[(currentMonthIndex + 1) % 12];
-               let nextBillingYear = currentMonthIndex === 11 ? Number(payment.billing_year) + 1 : Number(payment.billing_year);
-
-               const roomRent = toNumber(payment.room?.monthly_rent) || 0;
-               const oldBalance = isFullyPaid ? 0 : Math.max(Number(payment.amount_due || 0) - Number(payment.amount_paid || 0), 0);
-               const nextAmountDue = roomRent + oldBalance;
-
-               spawnPromises.push(
-                  supabase.from('payments').select('payment_id')
-                    .eq('tenant_id', payment.tenant_id).eq('billing_month', nextBillingMonth).eq('billing_year', nextBillingYear).limit(1)
-                    .then(({data}) => {
-                       if (!data || data.length === 0) {
-                          spawned = true;
-                          return supabase.from('payments').insert({
-                            tenant_id: payment.tenant_id,
-                            billing_month: nextBillingMonth,
-                            billing_year: nextBillingYear,
-                            amount_due: nextAmountDue,
-                            amount_paid: 0,
-                            balance: 0,
-                            payment_method: 'Over-the-Counter',
-                            status: toDatabaseStatus('BILLING'),
-                            billing_period_start: nextBillingPeriodStart,
-                            billing_period_end: nextBillingPeriodEnd
-                          });
-                       }
-                    })
-               );
-            }
-         }
-      }
-
-      await Promise.all(spawnPromises);
-
-      if (spawned && isRecursive !== true) {
-         return fetchPayments(true);
-      }
-
-      setPayments(enrichedRows);
-      return enrichedRows;
-    } catch (fetchError) {
-      setPayments([]);
-      setError(fetchError.message || 'Unable to load payments.');
+      setAllPayments(transformedPayments);
+      return transformedPayments;
+    } catch (err) {
+      console.error('Error fetching payments:', err);
+      setError(err.message || 'Failed to load payments');
+      setAllPayments([]);
       return [];
     } finally {
-      if (isRecursive !== true) setLoading(false);
+      setLoading(false);
     }
   }, []);
 
@@ -796,278 +488,187 @@ export function usePayments() {
     fetchPayments();
   }, [fetchPayments]);
 
-  const allPayments = useMemo(() => payments, [payments]);
-
-  const pendingValidationPayments = useMemo(
-    () => allPayments.filter((payment) => isPendingStatus(normalizeStatusValue(payment.status_normalized))),
-    [allPayments]
-  );
-
-  const paymentsByTenant = useMemo(() => {
-    const map = new Map();
-
-    allPayments.forEach((payment) => {
-      const tenantId = toTenantId(payment.tenant_id);
-      if (!tenantId) {
-        return;
-      }
-
-      const rows = map.get(tenantId) ?? [];
-      rows.push(payment);
-      map.set(tenantId, rows);
-    });
-
-    map.forEach((rows) => {
-      rows.sort((a, b) => {
-        const dateA = parseDate(a.due_date_resolved ?? a.payment_date)?.getTime() ?? 0;
-        const dateB = parseDate(b.due_date_resolved ?? b.payment_date)?.getTime() ?? 0;
-        return dateB - dateA;
-      });
-    });
-
-    return map;
+  const tenantPayments = useMemo(() => {
+    return buildLedgerEntries(allPayments);
   }, [allPayments]);
 
-  const tenantPayments = useMemo(() => {
-    const summaries = [];
+  const pendingValidationPayments = useMemo(() => {
+    return allPayments
+      .filter((payment) => {
+        const status = normalizeStatusValue(payment?.status_normalized || payment?.status);
+        return status === 'PENDING' || status === 'PENDING_VALIDATION';
+      })
+      .map((payment) => {
+        const amountDue = toNumber(payment?.amount_due);
+        const amountPaid = toNumber(payment?.amount_paid);
+        const balance = calculateBalance(amountDue, amountPaid);
+        const statusNormalized = resolveRawStatus({
+          amountDue,
+          amountPaid,
+          dueDate: parseDate(payment?.billing_period_end),
+          sourceStatus: payment?.status
+        });
 
-    paymentsByTenant.forEach((ledger, tenantId) => {
-      if (ledger && ledger.length > 0) {
-        summaries.push(ledger[0]);
-      }
-    });
+        return {
+          ...payment,
+          amount_due: amountDue,
+          balance,
+          status_normalized: statusNormalized,
+          display_status: formatPaymentStatus(statusNormalized)
+        };
+      });
+  }, [allPayments]);
 
-    summaries.sort((a, b) => {
-      const nameA = normalizeString(a?.tenant_name).toLowerCase();
-      const nameB = normalizeString(b?.tenant_name).toLowerCase();
-      if (nameA && nameB) {
-        return nameA.localeCompare(nameB);
-      }
-      if (nameA) {
-        return -1;
-      }
-      if (nameB) {
-        return 1;
-      }
-      return (a?.tenant_id ?? 0) - (b?.tenant_id ?? 0);
-    });
+  const getTenantLedger = useCallback((tenantId) => {
+    return allPayments
+      .filter((payment) => Number(payment.tenant_id) === Number(tenantId))
+      .sort((a, b) => getLedgerSortTime(b) - getLedgerSortTime(a));
+  }, [allPayments]);
 
-    return summaries;
-  }, [paymentsByTenant]);
+  const getTenantSummary = useCallback((tenantId) => {
+    const tenantHistory = allPayments
+      .filter((payment) => Number(payment.tenant_id) === Number(tenantId))
+      .sort((a, b) => getLedgerSortTime(b) - getLedgerSortTime(a));
+    const ledger = buildLedgerEntries(tenantHistory);
 
-  const getTenantLedger = useCallback(
-    (tenantId) => {
-      const parsedTenantId = toTenantId(tenantId);
-      if (!parsedTenantId) {
-        return [];
-      }
+    if (ledger.length === 0) {
+      return { totalDue: 0, totalPaid: 0, outstandingBalance: 0 };
+    }
+    
+    const totalDue = ledger.reduce((sum, p) => sum + toNumber(p.amount_due), 0);
+    const totalPaid = ledger.reduce((sum, p) => sum + toNumber(p.amount_paid), 0);
+    const outstandingBalance = calculateBalance(totalDue, totalPaid);
+    
+    return { totalDue, totalPaid, outstandingBalance };
+  }, [allPayments]);
 
-      return paymentsByTenant.get(parsedTenantId) ?? [];
-    },
-    [paymentsByTenant]
-  );
-
-  const getTenantSummary = useCallback(
-    (tenantId) => {
-      const ledger = getTenantLedger(tenantId);
-
-      const totalRent = ledger.reduce((sum, payment) => sum + toNumber(payment.amount_due), 0);
-      const totalPaid = ledger.reduce((sum, payment) => sum + toNumber(payment.amount_paid), 0);
-      const outstandingBalance = ledger.reduce((sum, payment) => sum + (toNumber(payment.amount_due) - toNumber(payment.amount_paid)), 0);
-
-      return {
-        totalRent,
-        totalPaid,
-        outstandingBalance
-      };
-    },
-    [getTenantLedger]
-  );
-
-  const updatePayment = useCallback(
-    async (paymentId, payload) => {
-      const parsedPaymentId = Number(paymentId);
-      if (!Number.isInteger(parsedPaymentId) || parsedPaymentId <= 0) {
-        throw new Error('A valid payment id is required.');
-      }
-
-      setActionPaymentId(parsedPaymentId);
-      setError('');
-
-      try {
-        const nextPayload = { ...payload };
-        if (Object.prototype.hasOwnProperty.call(nextPayload, 'status')) {
-          const nextStatus = toDatabaseStatus(nextPayload.status);
-          if (nextStatus) {
-            nextPayload.status = nextStatus;
-          } else {
-            delete nextPayload.status;
-          }
-        }
-
-        const { error: updateError } = await supabase.from('payments').update(nextPayload).eq('payment_id', parsedPaymentId);
-
-        if (updateError) {
-          throw new Error(`Failed to update payment: ${updateError.message}`);
-        }
-
-        await fetchPayments();
-      } finally {
-        setActionPaymentId(null);
-      }
-    },
-    [fetchPayments]
-  );
-
-  const processPayment = useCallback(
-    async ({ paymentId, amountPaid, paymentMethod, paymentDate, referenceNo, receiptProof, notes }) => {
-      const selectedPayment = allPayments.find((payment) => Number(payment.payment_id) === Number(paymentId));
-      if (!selectedPayment) {
-        throw new Error('Payment record not found.');
-      }
-
-      const normalizedAmountPaid = Math.max(0, toNumber(amountPaid));
-      const normalizedAmountDue = toNumber(selectedPayment.amount_due);
-      const balance = calculateBalance(normalizedAmountDue, normalizedAmountPaid);
-
-      const payload = {
-        amount_paid: normalizedAmountPaid,
-        balance,
-        payment_method: normalizeString(paymentMethod) || null,
-        payment_date: normalizeString(paymentDate) || new Date().toISOString().slice(0, 10),
-        reference_no: toReferenceNumber(referenceNo),
-        receipt_proof: normalizeString(receiptProof) || null,
-        status: toDatabaseStatus('PENDING'),
-        notes: normalizeString(notes) || selectedPayment.notes || null
-      };
-
-      await updatePayment(paymentId, payload);
-    },
-    [allPayments, updatePayment]
-  );
-
-  const approvePayment = useCallback(
-    async (payment) => {
-      if (!payment?.payment_id) {
-        throw new Error('Payment data is required for approval.');
-      }
-
+  const approvePayment = useCallback(async (payment) => {
+    const paymentId = Number(payment?.payment_id);
+    if (!paymentId) throw new Error('Invalid payment');
+    
+    setActionPaymentId(paymentId);
+    
+    try {
       const amountDue = toNumber(payment.amount_due);
       const amountPaid = toNumber(payment.amount_paid);
       const balance = calculateBalance(amountDue, amountPaid);
-      const newStatus = getApprovedStatus(amountDue, amountPaid);
+      const status = getApprovedDatabaseStatus(balance);
+      const paidDate = new Date().toISOString();
+      const updateData = {
+        status
+      };
 
-      if (newStatus === 'PAID') {
-        try {
-          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-          const currentMonthIndex = monthNames.findIndex(m => m.toLowerCase() === (payment.billing_month || '').toLowerCase());
-          
-          if (currentMonthIndex !== -1) {
-            const nextMonthIndex = (currentMonthIndex + 1) % 12;
-            const nextBillingMonth = monthNames[nextMonthIndex];
-            const nextBillingYear = currentMonthIndex === 11 ? Number(payment.billing_year) + 1 : Number(payment.billing_year);
+      if (payment?.source_has_balance_field) {
+        updateData.balance = balance;
+      }
 
-            let nextBillingPeriodStart = null;
-            let nextBillingPeriodEnd = null;
+      if (payment?.source_date_column) {
+        updateData[payment.source_date_column] = paidDate;
+      }
+      
+      const { error: updateError } = await supabase
+        .from('payments')
+        .update(updateData)
+        .eq('payment_id', paymentId);
+      
+      if (updateError) throw new Error(updateError.message);
 
-            if (payment.billing_period_end) {
-              const startD = new Date(payment.billing_period_end);
-              if (!isNaN(startD.getTime())) {
-                startD.setDate(startD.getDate() + 1);
-                nextBillingPeriodStart = startD.toISOString().slice(0, 10);
-                
-                const endD = new Date(startD);
-                endD.setMonth(endD.getMonth() + 1);
-                nextBillingPeriodEnd = endD.toISOString().slice(0, 10);
-              }
-            } else if (payment.billing_period_start) {
-              const startD = new Date(payment.billing_period_start);
-              if (!isNaN(startD.getTime())) {
-                startD.setMonth(startD.getMonth() + 1);
-                startD.setDate(startD.getDate() + 1);
-                nextBillingPeriodStart = startD.toISOString().slice(0, 10);
-                
-                const endD = new Date(startD);
-                endD.setMonth(endD.getMonth() + 1);
-                nextBillingPeriodEnd = endD.toISOString().slice(0, 10);
-              }
-            }
+      const billingId = Number(payment?.billing_id);
+      if (billingId) {
+        const { data: billingRow, error: billingFetchError } = await supabase
+          .from('billing_ledger')
+          .select('billing_id, amount_due')
+          .eq('billing_id', billingId)
+          .maybeSingle();
 
-            const { data: existingRows } = await supabase
-              .from('payments')
-              .select('payment_id')
-              .eq('tenant_id', payment.tenant_id)
-              .eq('billing_month', nextBillingMonth)
-              .eq('billing_year', nextBillingYear)
-              .limit(1);
+        if (billingFetchError) {
+          throw new Error(billingFetchError.message);
+        }
 
-            if (!existingRows || existingRows.length === 0) {
-              const nextAmountDue = toNumber(payment.room?.monthly_rent) || toNumber(payment.amount_due) || 0;
-              const nextPayload = {
-                tenant_id: payment.tenant_id,
-                billing_month: nextBillingMonth,
-                billing_year: nextBillingYear,
-                amount_due: nextAmountDue,
-                amount_paid: 0,
-                balance: 0,
-                payment_method: 'Over-the-Counter',
-                status: 'Billing',
-                billing_period_start: nextBillingPeriodStart,
-                billing_period_end: nextBillingPeriodEnd
-              };
-              
-              await supabase.from('payments').insert(nextPayload);
-            }
+        if (billingRow) {
+          const { data: billingPayments, error: billingPaymentsError } = await supabase
+            .from('payments')
+            .select('amount_paid, status')
+            .eq('billing_id', billingId);
+
+          if (billingPaymentsError) {
+            throw new Error(billingPaymentsError.message);
           }
-        } catch (err) {
-          console.error('Failed to auto-generate next billing period:', err);
+
+          const nextLedgerPaid = (billingPayments || []).reduce((sum, billingPayment) => {
+            const paymentStatus = normalizeStatusValue(billingPayment?.status);
+            if (paymentStatus === 'PENDING' || paymentStatus === 'PENDING_VALIDATION' || paymentStatus === 'REJECTED') {
+              return sum;
+            }
+
+            return sum + toNumber(billingPayment?.amount_paid);
+          }, 0);
+          const nextLedgerDue = toNumber(billingRow.amount_due);
+          const nextLedgerBalance = calculateBalance(nextLedgerDue, nextLedgerPaid);
+
+          const { error: billingUpdateError } = await supabase
+            .from('billing_ledger')
+            .update({
+              amount_paid: nextLedgerPaid,
+              balance: nextLedgerBalance
+            })
+            .eq('billing_id', billingId);
+
+          if (billingUpdateError) {
+            throw new Error(billingUpdateError.message);
+          }
         }
       }
+      
+      await fetchPayments();
+      return { createdNextBilling: false };
+    } catch (err) {
+      throw new Error(err.message || 'Failed to approve payment');
+    } finally {
+      setActionPaymentId(null);
+    }
+  }, [fetchPayments]);
 
-      const payload = {
-        balance,
-        status: toDatabaseStatus(newStatus)
+  const rejectPayment = useCallback(async (payment, notes = '') => {
+    const paymentId = Number(payment?.payment_id);
+    if (!paymentId) throw new Error('Invalid payment');
+    
+    setActionPaymentId(paymentId);
+    
+    try {
+      const updateData = {
+        status: 'REJECTED'
       };
 
-      await updatePayment(payment.payment_id, payload);
-    },
-    [updatePayment]
-  );
-
-  const rejectPayment = useCallback(
-    async (payment, notes = '') => {
-      const paymentId = Number(payment?.payment_id ?? payment);
-      if (!Number.isInteger(paymentId) || paymentId <= 0) {
-        throw new Error('Payment data is required for rejection.');
+      if (payment?.source_has_notes_field) {
+        updateData.notes = notes || null;
       }
 
-      const payload = {
-        status: toDatabaseStatus('REJECTED')
-      };
-
-      if (normalizeString(notes)) {
-        payload.notes = normalizeString(notes);
-      }
-
-      await updatePayment(paymentId, payload);
-    },
-    [updatePayment]
-  );
-  
+      const { error: updateError } = await supabase
+        .from('payments')
+        .update(updateData)
+        .eq('payment_id', paymentId);
+      
+      if (updateError) throw new Error(updateError.message);
+      await fetchPayments();
+    } catch (err) {
+      throw new Error(err.message || 'Failed to reject payment');
+    } finally {
+      setActionPaymentId(null);
+    }
+  }, [fetchPayments]);
 
   return {
     loading,
     error,
     actionPaymentId,
-    allPayments,
+    rawAllPayments: allPayments,
     tenantPayments,
     pendingValidationPayments,
-    refreshPayments: fetchPayments,
-    updatePayment,
-    processPayment,
     approvePayment,
     rejectPayment,
     getTenantLedger,
-    getTenantSummary
+    getTenantSummary,
+    refreshPayments: fetchPayments
   };
 }
