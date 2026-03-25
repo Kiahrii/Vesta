@@ -173,6 +173,21 @@
     background-color: #f2f2f2;
 }
 
+.tenant-filter,
+.sort-filter {
+    background: #f6f6f6;
+    border: 1px solid #495057;
+    border-radius: 10px;
+    height: 40px;
+    padding: 0 12px;
+    font-family: 'Arial', sans-serif;
+    color: #495057;
+}
+
+.overdue-row {
+    background-color: #ffe5e5;
+}
+
 // CARD
 .rent-card {
     width: 220px;
