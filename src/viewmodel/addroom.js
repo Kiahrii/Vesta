@@ -29,6 +29,31 @@ const normalizeForPath = (value = '') => normalizeString(value).toLowerCase().re
 const isTenantActive = (tenant) => !tenant.move_out_date && !normalizeStatus(tenant.status).includes('moved');
 const pickJoinedRow = (value) => (Array.isArray(value) ? value[0] ?? null : value ?? null);
 
+const ROOM_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const ROOM_NUMBER_MIN = 1;
+const ROOM_NUMBER_MAX = 5;
+const ROOM_NUMBER_PAD = 3;
+
+const normalizeRoomNo = (value = '') => {
+  const trimmed = normalizeString(value).toUpperCase();
+  if (!trimmed) {
+    return '';
+  }
+
+  const match = trimmed.match(/^([A-Z])\s*-\s*(\d{1,3})$/);
+  if (!match) {
+    return '';
+  }
+
+  const letter = match[1];
+  const number = Number(match[2]);
+  if (!Number.isInteger(number) || number < ROOM_NUMBER_MIN || number > ROOM_NUMBER_MAX) {
+    return '';
+  }
+
+  return `${letter}-${String(number).padStart(ROOM_NUMBER_PAD, '0')}`;
+};
+
 const toRoomResolutionMaps = (rooms = []) => {
   const roomIds = [];
   const roomIdByNo = new Map();
@@ -132,6 +157,25 @@ export async function getRooms() {
   }
 
   return data ?? [];
+}
+
+export function getNextRoomNumber(rooms = []) {
+  const existing = new Set(
+    (rooms ?? [])
+      .map((room) => normalizeRoomNo(room?.room_no))
+      .filter(Boolean)
+  );
+
+  for (const letter of ROOM_LETTERS) {
+    for (let number = ROOM_NUMBER_MIN; number <= ROOM_NUMBER_MAX; number += 1) {
+      const candidate = `${letter}-${String(number).padStart(ROOM_NUMBER_PAD, '0')}`;
+      if (!existing.has(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  return '';
 }
 
 export async function getRoomTenants(roomsOrRoomIds = []) {

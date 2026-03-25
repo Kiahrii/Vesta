@@ -10,22 +10,23 @@ export default function ViewModal({
   showSpinner = true,
   closeOnBackdrop = false,
   onClose = undefined,
-  actions = null
+  actions = null,
+  duration = 2000,
+  autoClose = true
 }) {
+  useEffect(() => {
+    if (open && onClose && autoClose) {
+      const timer = setTimeout(() => {
+        onClose();
+      }, duration);
 
-useEffect(() => {
-  if (open && onClose) {
-    const timer = setTimeout(() => {
-      onClose();
-    }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [autoClose, duration, open, onClose]);
 
-    return () => clearTimeout(timer);
+  if (!open || typeof document === 'undefined') {
+    return null;
   }
-}, [open, onClose]);
-
-if (!open || typeof document === 'undefined') {
-  return null;
-}
 
   const handleBackdropClick = () => {
     if (closeOnBackdrop && typeof onClose === 'function') {
@@ -109,5 +110,7 @@ ViewModal.propTypes = {
   showSpinner: PropTypes.bool,
   closeOnBackdrop: PropTypes.bool,
   onClose: PropTypes.func,
-  actions: PropTypes.node
+  actions: PropTypes.node,
+  duration: PropTypes.number,
+  autoClose: PropTypes.bool
 };

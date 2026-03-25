@@ -187,11 +187,7 @@ export async function registerTenant(payload) {
     roomId
   } = validateRegisterTenantPayload(payload);
 
-  const { data: roomData, error: roomError } = await supabase
-    .from('rooms')
-    .select('room_id, room_no')
-    .eq('room_id', roomId)
-    .maybeSingle();
+  const { data: roomData, error: roomError } = await supabase.from('rooms').select('room_id, room_no').eq('room_id', roomId).maybeSingle();
 
   if (roomError) {
     throw new Error(`Failed to validate room: ${roomError.message}`);
@@ -241,11 +237,7 @@ export async function registerTenant(payload) {
     room_id: roomId
   };
 
-  const { data: tenantData, error: tenantError } = await supabase
-    .from('tenants')
-    .insert(tenantRecord)
-    .select()
-    .maybeSingle();
+  const { data: tenantData, error: tenantError } = await supabase.from('tenants').insert(tenantRecord).select().maybeSingle();
 
   if (tenantError) {
     await supabase.from('users').delete().eq('user_id', userId);
@@ -286,10 +278,7 @@ export async function registerTenant(payload) {
   if (billingRoomError) {
     await supabase.from('tenants').delete().eq('tenant_id', tenantData.tenant_id);
     await supabase.from('users').delete().eq('user_id', userId);
-    await supabase
-      .from('rooms')
-      .update({ occupancy_status: 'Available' })
-      .eq('room_id', roomId);
+    await supabase.from('rooms').update({ occupancy_status: 'Available' }).eq('room_id', roomId);
     await supabase.auth.signOut();
     throw new Error(`Failed to fetch room rental details: ${billingRoomError.message}`);
   }
@@ -298,52 +287,49 @@ export async function registerTenant(payload) {
   if (!Number.isFinite(monthlyRent) || monthlyRent <= 0) {
     await supabase.from('tenants').delete().eq('tenant_id', tenantData.tenant_id);
     await supabase.from('users').delete().eq('user_id', userId);
-    await supabase
-      .from('rooms')
-      .update({ occupancy_status: 'Available' })
-      .eq('room_id', roomId);
+    await supabase.from('rooms').update({ occupancy_status: 'Available' }).eq('room_id', roomId);
     await supabase.auth.signOut();
     throw new Error('Monthly rent is missing or invalid. Cannot create billing.');
   }
 
   const convertMonthToEnumFormat = (monthName) => {
-  const monthMap = {
-    'JANUARY': 'January',
-    'FEBRUARY': 'February',
-    'MARCH': 'March',
-    'APRIL': 'April',
-    'MAY': 'May',
-    'JUNE': 'June',
-    'JULY': 'July',
-    'AUGUST': 'August',
-    'SEPTEMBER': 'September',
-    'OCTOBER': 'October',
-    'NOVEMBER': 'November',
-    'DECEMBER': 'December'
+    const monthMap = {
+      JANUARY: 'January',
+      FEBRUARY: 'February',
+      MARCH: 'March',
+      APRIL: 'April',
+      MAY: 'May',
+      JUNE: 'June',
+      JULY: 'July',
+      AUGUST: 'August',
+      SEPTEMBER: 'September',
+      OCTOBER: 'October',
+      NOVEMBER: 'November',
+      DECEMBER: 'December'
+    };
+
+    return monthMap[monthName] || monthName;
   };
-  
-  return monthMap[monthName] || monthName;
-};
 
   const monthNames = [
-  'JANUARY',
-  'FEBRUARY',
-  'MARCH',
-  'APRIL',
-  'MAY',
-  'JUNE',
-  'JULY',
-  'AUGUST',
-  'SEPTEMBER',
-  'OCTOBER',
-  'NOVEMBER',
-  'DECEMBER'
-];
+    'JANUARY',
+    'FEBRUARY',
+    'MARCH',
+    'APRIL',
+    'MAY',
+    'JUNE',
+    'JULY',
+    'AUGUST',
+    'SEPTEMBER',
+    'OCTOBER',
+    'NOVEMBER',
+    'DECEMBER'
+  ];
 
-const now = new Date();
-const billingMonthFull = monthNames[now.getMonth()];
-const billingMonth = convertMonthToEnumFormat(billingMonthFull); // Convert to "March", "April", etc.
-const billingYear = now.getFullYear();
+  const now = new Date();
+  const billingMonthFull = monthNames[now.getMonth()];
+  const billingMonth = convertMonthToEnumFormat(billingMonthFull); // Convert to "March", "April", etc.
+  const billingYear = now.getFullYear();
 
   const billingPeriodStart = now.toISOString().slice(0, 10);
   const bpDate = new Date(billingPeriodStart);
@@ -359,8 +345,12 @@ const billingYear = now.getFullYear();
     billing_year: billingYear,
     amount_due: monthlyRent,
     amount_paid: 0,
-    balance: 0,
-    payment_method: 'Over-the-Counter',
+    balance: monthlyRent,
+    payment_method: null,
+    payment_date: null,
+    paid_date: null,
+    reference_no: null,
+    receipt_proof: null,
     status: 'Billing',
     billing_period_start: billingPeriodStart,
     billing_period_end: billingPeriodEnd
@@ -371,10 +361,7 @@ const billingYear = now.getFullYear();
   if (paymentError) {
     await supabase.from('tenants').delete().eq('tenant_id', tenantData.tenant_id);
     await supabase.from('users').delete().eq('user_id', userId);
-    await supabase
-      .from('rooms')
-      .update({ occupancy_status: 'Available' })
-      .eq('room_id', roomId);
+    await supabase.from('rooms').update({ occupancy_status: 'Available' }).eq('room_id', roomId);
     await supabase.auth.signOut();
     throw new Error(`Failed to create initial billing record: ${paymentError.message}`);
   }

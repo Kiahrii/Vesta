@@ -19,7 +19,7 @@ import { loginLandlord } from 'viewmodel/login-landlord';
 import ViewModal from 'viewmodel/ViewModal';
 
 // assets
-import DarkLogo from 'assets/images/logo-dark.svg';
+import DarkLogo from 'assets/images/lowgow.svg';
 
 // ==============================|| AUTH LOGIN FORM ||============================== //
 

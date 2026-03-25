@@ -54,7 +54,7 @@
         max-width: 100%;
       }
 
-      img + span {
+      img+span {
         padding-left: 10px;
       }
 
@@ -434,10 +434,12 @@
 }
 
 @keyframes orbFloat {
+
   0%,
   100% {
     transform: translateY(0);
   }
+
   50% {
     transform: translateY(-12px);
   }

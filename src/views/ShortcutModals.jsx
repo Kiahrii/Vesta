@@ -5,31 +5,33 @@ import { getTenantRoomOptions, registerTenant } from 'viewmodel/registertenant.j
 import {
   addRoom,
   updateRoom,
+  getRooms,
+  getNextRoomNumber,
   getRoomTenantAssignments,
   getTenantCandidates,
   assignTenantToRoom,
-  removeTenantFromRoom,
+  removeTenantFromRoom
 } from 'viewmodel/addroom.js';
 import 'assets/scss/apartment-page/shortcutModals.scss';
 import ViewModal from 'viewmodel/ViewModal';
 import { useShortcutModalLogic } from 'viewmodel/shortcutmodals-logic';
 
-  const getMonthAbbreviation = (fullMonthName) => {
+const getMonthAbbreviation = (fullMonthName) => {
   const monthMap = {
-    'January': 'Jan',
-    'February': 'Feb',
-    'March': 'Mar',
-    'April': 'Apr',
-    'May': 'May',
-    'June': 'Jun',
-    'July': 'Jul',
-    'August': 'Aug',
-    'September': 'Sep',
-    'October': 'Oct',
-    'November': 'Nov',
-    'December': 'Dec'
+    January: 'Jan',
+    February: 'Feb',
+    March: 'Mar',
+    April: 'Apr',
+    May: 'May',
+    June: 'Jun',
+    July: 'Jul',
+    August: 'Aug',
+    September: 'Sep',
+    October: 'Oct',
+    November: 'Nov',
+    December: 'Dec'
   };
-  
+
   return monthMap[fullMonthName] || fullMonthName.substring(0, 3);
 };
 
@@ -55,6 +57,7 @@ export function RegisterTenantModal({ open, onClose }) {
   const [error, setError] = useState({ field: '', message: '' });
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
   const [rooms, setRooms] = useState([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
 
@@ -142,7 +145,7 @@ export function RegisterTenantModal({ open, onClose }) {
         lease_end: form.lease_end
       });
 
-      alert(
+      setFeedbackMessage(
         result.needsEmailConfirmation
           ? 'Tenant registered successfully. Please ask tenant to confirm their email.'
           : 'Tenant registered successfully.'
@@ -179,138 +182,141 @@ export function RegisterTenantModal({ open, onClose }) {
   };
 
   return (
-    <Modal open={open} onClose={handleClose}>
-      <div className="shortcut-modal shortcut-modal--register">
-        <h2 className="shortcut-modal__title">Register Tenant</h2>
+    <>
+      <Modal open={open} onClose={handleClose}>
+        <div className="shortcut-modal shortcut-modal--register">
+          <h2 className="shortcut-modal__title">Register Tenant</h2>
 
-        {error.message && (
-          <div className="shortcut-modal__global-error">
-            {error.message}
-          </div>
-        )}
+          {error.message && <div className="shortcut-modal__global-error">{error.message}</div>}
 
-        <div className="shortcut-modal__body shortcut-modal__body--scroll">
-          <div className="shortcut-modal__grid">
-            <div className="shortcut-modal__section">
-              <h5 className="shortcut-modal__subtitle">Tenant Information</h5>
-              <input
-                className={`shortcut-modal__input ${error.field === 'first_name' ? 'error' : ''}`}
-                name="first_name"
-                value={form.first_name}
-                onChange={handleChange}
-                placeholder="First Name"
-              />
-              <input
-                className={`shortcut-modal__input ${error.field === 'middle_name' ? 'error' : ''}`}
-                name="middle_name"
-                value={form.middle_name}
-                onChange={handleChange}
-                placeholder="Middle Name"
-              />
-              <input
-                className={`shortcut-modal__input ${error.field === 'last_name' ? 'error' : ''}`}
-                name="last_name"
-                value={form.last_name}
-                onChange={handleChange}
-                placeholder="Last Name"
-              />
-              <input
-                className={`shortcut-modal__input ${error.field === 'contact_no' ? 'error' : ''}`}
-                name="contact_no"
-                value={form.contact_no}
-                onChange={handleChange}
-                placeholder="Contact No"
-              />
-            </div>
+          <div className="shortcut-modal__body shortcut-modal__body--scroll">
+            <div className="shortcut-modal__grid">
+              <div className="shortcut-modal__section">
+                <h5 className="shortcut-modal__subtitle">Tenant Information</h5>
+                <input
+                  className={`shortcut-modal__input ${error.field === 'first_name' ? 'error' : ''}`}
+                  name="first_name"
+                  value={form.first_name}
+                  onChange={handleChange}
+                  placeholder="First Name"
+                />
+                <input
+                  className={`shortcut-modal__input ${error.field === 'middle_name' ? 'error' : ''}`}
+                  name="middle_name"
+                  value={form.middle_name}
+                  onChange={handleChange}
+                  placeholder="Middle Name"
+                />
+                <input
+                  className={`shortcut-modal__input ${error.field === 'last_name' ? 'error' : ''}`}
+                  name="last_name"
+                  value={form.last_name}
+                  onChange={handleChange}
+                  placeholder="Last Name"
+                />
+                <input
+                  className={`shortcut-modal__input ${error.field === 'contact_no' ? 'error' : ''}`}
+                  name="contact_no"
+                  value={form.contact_no}
+                  onChange={handleChange}
+                  placeholder="Contact No"
+                />
+              </div>
 
-            <div className="shortcut-modal__section">
-              <h5 className="shortcut-modal__subtitle">Emergency Contact</h5>
-              <input
-                className={`shortcut-modal__input ${error.field === 'contact_name' ? 'error' : ''}`}
-                name="contact_name"
-                value={form.contact_name}
-                onChange={handleChange}
-                placeholder="Contact Name"
-              />
-              <input
-                className={`shortcut-modal__input ${error.field === 'em_contact_no' ? 'error' : ''}`}
-                name="em_contact_no"
-                value={form.em_contact_no}
-                onChange={handleChange}
-                placeholder="Contact Number"
-              />
-            </div>
+              <div className="shortcut-modal__section">
+                <h5 className="shortcut-modal__subtitle">Emergency Contact</h5>
+                <input
+                  className={`shortcut-modal__input ${error.field === 'contact_name' ? 'error' : ''}`}
+                  name="contact_name"
+                  value={form.contact_name}
+                  onChange={handleChange}
+                  placeholder="Contact Name"
+                />
+                <input
+                  className={`shortcut-modal__input ${error.field === 'em_contact_no' ? 'error' : ''}`}
+                  name="em_contact_no"
+                  value={form.em_contact_no}
+                  onChange={handleChange}
+                  placeholder="Contact Number"
+                />
+              </div>
 
-            <div className="shortcut-modal__section">
-              <h5 className="shortcut-modal__subtitle">Room Details</h5>
-              <input
-                className={`shortcut-modal__input ${error.field === 'move_in' ? 'error' : ''}`}
-                type="date"
-                name="move_in"
-                value={form.move_in}
-                onChange={handleChange}
-              />
+              <div className="shortcut-modal__section">
+                <h5 className="shortcut-modal__subtitle">Room Details</h5>
+                <input
+                  className={`shortcut-modal__input ${error.field === 'move_in' ? 'error' : ''}`}
+                  type="date"
+                  name="move_in"
+                  value={form.move_in}
+                  onChange={handleChange}
+                />
 
-              <select
-                className={`shortcut-modal__input ${error.field === 'room_id' ? 'error' : ''}`}
-                name="room_id"
-                value={form.room_id}
-                onChange={handleChange}
-              >
-                <option value="">
-                  {roomsLoading ? 'Loading rooms...' : 'Select Room'}
-                </option>
-                {!roomsLoading &&
-                  rooms.map((room) => (
-                    <option key={room.room_id} value={room.room_id}>
-                      Room {room.room_no}
-                    </option>
-                  ))}
-              </select>
-                
-              <h5 className="shortcut-modal__subtitle">Lease End Date</h5>
-              <input
-                className={`shortcut-modal__input ${error.field === 'lease_end' ? 'error' : ''}`}
-                type="date"
-                name="lease_end"
-                value={form.lease_end}
-                onChange={handleChange}
-              />
-            </div>
+                <select
+                  className={`shortcut-modal__input ${error.field === 'room_id' ? 'error' : ''}`}
+                  name="room_id"
+                  value={form.room_id}
+                  onChange={handleChange}
+                >
+                  <option value="">{roomsLoading ? 'Loading rooms...' : 'Select Room'}</option>
+                  {!roomsLoading &&
+                    rooms.map((room) => (
+                      <option key={room.room_id} value={room.room_id}>
+                        Room {room.room_no}
+                      </option>
+                    ))}
+                </select>
 
-            <div className="shortcut-modal__section">
-              <h5 className="shortcut-modal__subtitle">Account Details</h5>
-              <input
-                className={`shortcut-modal__input ${error.field === 'email' ? 'error' : ''}`}
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                placeholder="Email"
-              />
-              <input
-                className={`shortcut-modal__input ${error.field === 'password' ? 'error' : ''}`}
-                type="password"
-                name="password"
-                value={form.password}
-                onChange={handleChange}
-                placeholder="Password"
-              />
+                <h5 className="shortcut-modal__subtitle">Lease End Date</h5>
+                <input
+                  className={`shortcut-modal__input ${error.field === 'lease_end' ? 'error' : ''}`}
+                  type="date"
+                  name="lease_end"
+                  value={form.lease_end}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div className="shortcut-modal__section">
+                <h5 className="shortcut-modal__subtitle">Account Details</h5>
+                <input
+                  className={`shortcut-modal__input ${error.field === 'email' ? 'error' : ''}`}
+                  name="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  placeholder="Email"
+                />
+                <input
+                  className={`shortcut-modal__input ${error.field === 'password' ? 'error' : ''}`}
+                  type="password"
+                  name="password"
+                  value={form.password}
+                  onChange={handleChange}
+                  placeholder="Password"
+                />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="shortcut-modal__actions">
-          <button className="shortcut-modal__btn shortcut-modal__btn--cancel" onClick={handleClose}>
-            Cancel
-          </button>
+          <div className="shortcut-modal__actions">
+            <button className="shortcut-modal__btn shortcut-modal__btn--cancel" onClick={handleClose}>
+              Cancel
+            </button>
 
-          <button className="shortcut-modal__btn shortcut-modal__btn--primary" type="button" onClick={handleSubmit} disabled={loading}>
-            Register
-          </button>
+            <button className="shortcut-modal__btn shortcut-modal__btn--primary" type="button" onClick={handleSubmit} disabled={loading}>
+              Register
+            </button>
+          </div>
         </div>
-      </div>
-      <ViewModal open={isSubmitting} message="Registering.." />
-    </Modal>
+        <ViewModal open={isSubmitting} message="Registering.." />
+      </Modal>
+      <ViewModal
+        open={Boolean(feedbackMessage)}
+        message={feedbackMessage}
+        showSpinner={false}
+        onClose={() => setFeedbackMessage('')}
+        duration={2000}
+      />
+    </>
   );
 }
 
@@ -325,6 +331,7 @@ export function AddRoomModal({ open, onClose, onSaved }) {
   });
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
+  const hasManualRoomNo = useRef(false);
 
   const [error, setError] = useState({ field: '', message: '' });
   const [loading, setLoading] = useState(false);
@@ -337,8 +344,49 @@ export function AddRoomModal({ open, onClose, onSaved }) {
     };
   }, [photoPreview]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let isMounted = true;
+    hasManualRoomNo.current = false;
+
+    const loadSuggestedRoom = async () => {
+      try {
+        const rooms = await getRooms();
+        const nextRoomNo = getNextRoomNumber(rooms);
+        if (!isMounted) {
+          return;
+        }
+        setForm((prev) => {
+          if (prev.room_no || hasManualRoomNo.current) {
+            return prev;
+          }
+          return { ...prev, room_no: nextRoomNo };
+        });
+      } catch (loadError) {
+        if (isMounted) {
+          setError({
+            field: 'room_no',
+            message: loadError.message || 'Failed to load next room number.'
+          });
+        }
+      }
+    };
+
+    loadSuggestedRoom();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [open]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'room_no') {
+      hasManualRoomNo.current = true;
+    }
     setForm((prev) => ({
       ...prev,
       [name]: value
@@ -397,7 +445,7 @@ export function AddRoomModal({ open, onClose, onSaved }) {
 
     try {
       await addRoom({ ...form, photoFile });
-      alert('Room added successfully.');
+      setFeedbackMessage('Room added successfully.');
       setLoading(false);
       onSaved?.();
       handleClose();
@@ -414,82 +462,88 @@ export function AddRoomModal({ open, onClose, onSaved }) {
     setForm({ room_no: '', monthly_rent: '', capacity: 1, occupancy_status: 'Available' });
     setPhotoFile(null);
     setPhotoPreview('');
+    hasManualRoomNo.current = false;
     setError({ field: '', message: '' });
     onClose();
   };
 
   return (
-    <Modal open={open} onClose={handleClose}>
-      <div className="shortcut-modal shortcut-modal--compact">
-        <h2 className="shortcut-modal__title">Add Room</h2>
+    <>
+      <Modal open={open} onClose={handleClose}>
+        <div className="shortcut-modal shortcut-modal--compact">
+          <h2 className="shortcut-modal__title">Add Room</h2>
 
-        {error.message && (
-          <div className="shortcut-modal__global-error">
-            {error.message}
+          {error.message && <div className="shortcut-modal__global-error">{error.message}</div>}
+
+          <div className="shortcut-modal__stack">
+            <input
+              className={`shortcut-modal__input ${error.field === 'room_no' ? 'error' : ''}`}
+              type="text"
+              name="room_no"
+              value={form.room_no}
+              onChange={handleChange}
+              placeholder="Room No"
+            />
+
+            <input
+              className={`shortcut-modal__input ${error.field === 'monthly_rent' ? 'error' : ''}`}
+              type="number"
+              name="monthly_rent"
+              value={form.monthly_rent}
+              onChange={handleChange}
+              placeholder="Monthly Rent"
+            />
+
+            <input
+              className={`shortcut-modal__input ${error.field === 'capacity' ? 'error' : ''}`}
+              type="number"
+              name="capacity"
+              value={form.capacity}
+              onChange={handleChange}
+              placeholder="Capacity"
+              min={1}
+              max={4}
+            />
+
+            <select
+              className={`shortcut-modal__input ${error.field === 'occupancy_status' ? 'error' : ''}`}
+              name="occupancy_status"
+              value={form.occupancy_status}
+              onChange={handleChange}
+            >
+              <option value="Available">Available</option>
+              <option value="Occupied">Occupied</option>
+              <option value="Under Maintenance">Under Maintenance</option>
+            </select>
+
+            <input
+              className={`shortcut-modal__input ${error.field === 'photo' ? 'error' : ''}`}
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoChange}
+            />
+
+            {photoPreview ? <img src={photoPreview} alt="Room preview" className="shortcut-modal__preview" /> : null}
           </div>
-        )}
 
-        <div className="shortcut-modal__stack">
-          <input
-            className={`shortcut-modal__input ${error.field === 'room_no' ? 'error' : ''}`}
-            type="text"
-            name="room_no"
-            value={form.room_no}
-            onChange={handleChange}
-            placeholder="Room No"
-          />
-
-          <input
-            className={`shortcut-modal__input ${error.field === 'monthly_rent' ? 'error' : ''}`}
-            type="number"
-            name="monthly_rent"
-            value={form.monthly_rent}
-            onChange={handleChange}
-            placeholder="Monthly Rent"
-          />
-
-          <input
-            className={`shortcut-modal__input ${error.field === 'capacity' ? 'error' : ''}`}
-            type="number"
-            name="capacity"
-            value={form.capacity}
-            onChange={handleChange}
-            placeholder="Capacity"
-            min={1}
-            max={4}
-          />
-
-          <select
-            className={`shortcut-modal__input ${error.field === 'occupancy_status' ? 'error' : ''}`}
-            name="occupancy_status"
-            value={form.occupancy_status}
-            onChange={handleChange}
-          >
-            <option value="Available">Available</option>
-            <option value="Occupied">Occupied</option>
-            <option value="Under Maintenance">Under Maintenance</option>
-          </select>
-
-          <input
-            className={`shortcut-modal__input ${error.field === 'photo' ? 'error' : ''}`}
-            type="file"
-            accept="image/*"
-            onChange={handlePhotoChange}
-          />
-
-          {photoPreview ? <img src={photoPreview} alt="Room preview" className="shortcut-modal__preview" /> : null}
+          <div className="shortcut-modal__actions">
+            <button className="shortcut-modal__btn shortcut-modal__btn--cancel" onClick={handleClose}>
+              Cancel
+            </button>
+            <button className="shortcut-modal__btn shortcut-modal__btn--primary" type="button" onClick={handleSubmit} disabled={loading}>
+              Add
+            </button>
+          </div>
         </div>
-
-        <div className="shortcut-modal__actions">
-          <button className="shortcut-modal__btn shortcut-modal__btn--cancel" onClick={handleClose}>
-            Cancel
-          </button>
-          <button className="shortcut-modal__btn shortcut-modal__btn--primary" type="button" onClick={handleSubmit} disabled={loading}>
-           Add
-          </button>
-        </div>
-      </div>
-    </Modal>
+      </Modal>
+      <ViewModal
+        open={Boolean(feedbackMessage)}
+        message={feedbackMessage}
+        showSpinner={false}
+        onClose={() => setFeedbackMessage('')}
+        duration={2000}
+      />
+    </>
   );
 }
 
@@ -509,6 +563,7 @@ export function UpdateRoomModal({ open, onClose, room, onSaved }) {
   const [error, setError] = useState({ field: '', message: '' });
   const [loading, setLoading] = useState(false);
   const [tenantActionLoading, setTenantActionLoading] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
 
   useEffect(() => {
     return () => {
@@ -656,7 +711,7 @@ export function UpdateRoomModal({ open, onClose, room, onSaved }) {
 
     try {
       await updateRoom(room.room_id, { ...form, photoFile });
-      alert('Room updated successfully.');
+      setFeedbackMessage('Room updated successfully.');
       setLoading(false);
       onSaved?.();
       onClose();
@@ -749,103 +804,139 @@ export function UpdateRoomModal({ open, onClose, room, onSaved }) {
   };
 
   return (
-    <Modal open={open} onClose={onClose}>
-      <div className="shortcut-modal shortcut-modal--compact">
-        <h2 className="shortcut-modal__title">Update Room</h2>
+    <>
+      <Modal open={open} onClose={onClose}>
+        <div className="shortcut-modal shortcut-modal--compact">
+          <h2 className="shortcut-modal__title">Update Room</h2>
 
-        {error.message && <div className="shortcut-modal__global-error">{error.message}</div>}
+          {error.message && <div className="shortcut-modal__global-error">{error.message}</div>}
 
-        <div className="shortcut-modal__stack">
-          {tenantSlots.map(({ slot, tenant }) => {
-            const selectedTenantId = newTenantIdsBySlot[slot] ?? '';
-            const filteredCandidates = tenantCandidates.filter((candidate) => !availableCandidateIds.has(candidate.tenant_id));
+          <div className="shortcut-modal__stack">
+            {tenantSlots.map(({ slot, tenant }) => {
+              const selectedTenantId = newTenantIdsBySlot[slot] ?? '';
+              const filteredCandidates = tenantCandidates.filter((candidate) => !availableCandidateIds.has(candidate.tenant_id));
 
-            return (
-              <div key={`tenant-slot-${slot}`} className="edit-room-field">
-                <label htmlFor={`edit-tenant-${slot}`}>Tenant {slot + 1}:</label>
-                <input
-                  id={`edit-tenant-${slot}`}
-                  className="otc-field-input"
-                  type="text"
-                  value={tenant ? tenant.full_name : '-'}
-                  readOnly
-                />
-                {tenant ? (
-                  <button className="remove" type="button" onClick={() => handleRemoveTenant(tenant.tenant_id)} disabled={tenantActionLoading || loading}>
-                    <i className="ph ph-trash" />
-                  </button>
-                ) : (
-                  <div className="d-flex gap-2">
-                    <select
-                      className="shortcut-modal__input"
-                      value={selectedTenantId}
-                      onChange={(event) => handleTenantSelectionChange(slot, event.target.value)}
+              return (
+                <div key={`tenant-slot-${slot}`} className="edit-room-field">
+                  <label htmlFor={`edit-tenant-${slot}`}>Tenant {slot + 1}:</label>
+                  <input
+                    id={`edit-tenant-${slot}`}
+                    className="otc-field-input"
+                    type="text"
+                    value={tenant ? tenant.full_name : '-'}
+                    readOnly
+                  />
+                  {tenant ? (
+                    <button
+                      className="remove"
+                      type="button"
+                      onClick={() => handleRemoveTenant(tenant.tenant_id)}
                       disabled={tenantActionLoading || loading}
                     >
-                      <option value="">Select tenant</option>
-                      {filteredCandidates.map((candidate) => (
-                        <option key={candidate.tenant_id} value={candidate.tenant_id}>
-                          {candidate.full_name}
-                        </option>
-                      ))}
-                    </select>
-                    <button className="add-tenant-btn" type="button" onClick={() => handleAddTenant(slot)} disabled={tenantActionLoading || loading}>
-                     <i class="ph ph-plus-circle"></i>
+                      <i className="ph ph-trash" />
                     </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                  ) : (
+                    <div className="d-flex gap-2">
+                      <select
+                        className="shortcut-modal__input"
+                        value={selectedTenantId}
+                        onChange={(event) => handleTenantSelectionChange(slot, event.target.value)}
+                        disabled={tenantActionLoading || loading}
+                      >
+                        <option value="">Select tenant</option>
+                        {filteredCandidates.map((candidate) => (
+                          <option key={candidate.tenant_id} value={candidate.tenant_id}>
+                            {candidate.full_name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="add-tenant-btn"
+                        type="button"
+                        onClick={() => handleAddTenant(slot)}
+                        disabled={tenantActionLoading || loading}
+                      >
+                        <i className="ph ph-plus-circle"></i>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
-          <input className={`shortcut-modal__input ${error.field === 'room_no' ? 'error' : ''}`} type="text" name="room_no" value={form.room_no} onChange={handleChange} placeholder="Room No" />
+            <input
+              className={`shortcut-modal__input ${error.field === 'room_no' ? 'error' : ''}`}
+              type="text"
+              name="room_no"
+              value={form.room_no}
+              onChange={handleChange}
+              placeholder="Room No"
+            />
 
-          <input
-            className={`shortcut-modal__input ${error.field === 'monthly_rent' ? 'error' : ''}`}
-            type="number"
-            name="monthly_rent"
-            value={form.monthly_rent}
-            onChange={handleChange}
-            placeholder="Monthly Rent"
-          />
+            <input
+              className={`shortcut-modal__input ${error.field === 'monthly_rent' ? 'error' : ''}`}
+              type="number"
+              name="monthly_rent"
+              value={form.monthly_rent}
+              onChange={handleChange}
+              placeholder="Monthly Rent"
+            />
 
-          <input
-            className={`shortcut-modal__input ${error.field === 'capacity' ? 'error' : ''}`}
-            type="number"
-            name="capacity"
-            value={form.capacity}
-            onChange={handleChange}
-            placeholder="Capacity"
-            min={1}
-            max={4}
-          />
+            <input
+              className={`shortcut-modal__input ${error.field === 'capacity' ? 'error' : ''}`}
+              type="number"
+              name="capacity"
+              value={form.capacity}
+              onChange={handleChange}
+              placeholder="Capacity"
+              min={1}
+              max={4}
+            />
 
-          <select
-            className={`shortcut-modal__input ${error.field === 'occupancy_status' ? 'error' : ''}`}
-            name="occupancy_status"
-            value={form.occupancy_status}
-            onChange={handleChange}
-          >
-            <option value="Available">Available</option>
-            <option value="Occupied">Occupied</option>
-            <option value="Under Maintenance">Under Maintenance</option>
-          </select>
+            <select
+              className={`shortcut-modal__input ${error.field === 'occupancy_status' ? 'error' : ''}`}
+              name="occupancy_status"
+              value={form.occupancy_status}
+              onChange={handleChange}
+            >
+              <option value="Available">Available</option>
+              <option value="Occupied">Occupied</option>
+              <option value="Under Maintenance">Under Maintenance</option>
+            </select>
 
-          <input className={`shortcut-modal__input ${error.field === 'photo' ? 'error' : ''}`} type="file" accept="image/*" onChange={handlePhotoChange} />
+            <input
+              className={`shortcut-modal__input ${error.field === 'photo' ? 'error' : ''}`}
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoChange}
+            />
 
-          {photoPreview ? <img src={photoPreview} alt="Room preview" className="shortcut-modal__preview" /> : null}
+            {photoPreview ? <img src={photoPreview} alt="Room preview" className="shortcut-modal__preview" /> : null}
+          </div>
+
+          <div className="shortcut-modal__actions">
+            <button className="shortcut-modal__btn shortcut-modal__btn--cancel" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              className="shortcut-modal__btn shortcut-modal__btn--primary"
+              type="button"
+              onClick={handleSubmit}
+              disabled={loading || tenantActionLoading}
+            >
+              {loading ? 'Saving...' : 'Save'}
+            </button>
+          </div>
         </div>
-
-        <div className="shortcut-modal__actions">
-          <button className="shortcut-modal__btn shortcut-modal__btn--cancel" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="shortcut-modal__btn shortcut-modal__btn--primary" type="button" onClick={handleSubmit} disabled={loading || tenantActionLoading}>
-            {loading ? 'Saving...' : 'Save'}
-          </button>
-        </div>
-      </div>
-    </Modal>
+      </Modal>
+      <ViewModal
+        open={Boolean(feedbackMessage)}
+        message={feedbackMessage}
+        showSpinner={false}
+        onClose={() => setFeedbackMessage('')}
+        duration={2000}
+      />
+    </>
   );
 }
 
@@ -876,12 +967,13 @@ export function OnTheCounter({ open, onClose }) {
 
   const [error, setError] = useState({ field: '', message: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
   const dropdownRef = useRef(null);
 
   // Update form when tenant is selected
   useEffect(() => {
     if (selectedTenant) {
-      setForm(prev => ({
+      setForm((prev) => ({
         ...prev,
         tenant: selectedTenant.full_name,
         roomNumber: selectedTenant.room_number
@@ -906,7 +998,7 @@ export function OnTheCounter({ open, onClose }) {
   const handleTenantInputChange = (e) => {
     const value = e.target.value;
     handleSearchChange(value);
-    
+
     // Clear error for tenant field if it was the one with error
     if (error.field === 'tenant') {
       setError({ field: '', message: '' });
@@ -924,7 +1016,7 @@ export function OnTheCounter({ open, onClose }) {
   const handleChange = (e) => {
     const { id, value } = e.target;
     const name = id.replace('otc-', '');
-    
+
     // Only allow manual changes for amount and date
     if (name === 'amount' || name === 'paymentDate') {
       setForm((prev) => ({
@@ -963,12 +1055,9 @@ export function OnTheCounter({ open, onClose }) {
     }
 
     setSubmitting(true);
-
-    setTimeout(() => {
-      alert('Payment Submitted (UI Only)');
-      setSubmitting(false);
-      handleClose();
-    }, 600);
+    setFeedbackMessage('Payment Submitted (UI Only)');
+    setSubmitting(false);
+    handleClose();
   };
 
   const handleClose = () => {
@@ -984,114 +1073,110 @@ export function OnTheCounter({ open, onClose }) {
   };
 
   return (
-    <Modal open={open} onClose={handleClose}>
-      <div className="shortcut-modal shortcut-modal--compact">
-        <h3 className="shortcut-modal__title shortcut-modal__title--small">
-          Pay Rent
-          <small>Over-The-Counter</small>
-        </h3>
+    <>
+      <Modal open={open} onClose={handleClose}>
+        <div className="shortcut-modal shortcut-modal--compact">
+          <h3 className="shortcut-modal__title shortcut-modal__title--small">
+            Pay Rent
+            <small>Over-The-Counter</small>
+          </h3>
 
-        {error.message && (
-          <div className="shortcut-modal__global-error">
-            {error.message}
-          </div>
-        )}
+          {error.message && <div className="shortcut-modal__global-error">{error.message}</div>}
 
-        {tenantsError && (
-          <div className="shortcut-modal__global-error">
-            {tenantsError}
-          </div>
-        )}
+          {tenantsError && <div className="shortcut-modal__global-error">{tenantsError}</div>}
 
-        <form onSubmit={handleSubmit}>
-          <div className="shortcut-modal__stack">
-            <div className="shortcut-modal__field-row" ref={dropdownRef}>
-              <label htmlFor="otc-tenant">Tenant:</label>
-              <div className="combobox-container">
+          <form onSubmit={handleSubmit}>
+            <div className="shortcut-modal__stack">
+              <div className="shortcut-modal__field-row" ref={dropdownRef}>
+                <label htmlFor="otc-tenant">Tenant:</label>
+                <div className="combobox-container">
+                  <input
+                    id="otc-tenant"
+                    className={`shortcut-modal__input ${error.field === 'tenant' ? 'error' : ''}`}
+                    type="text"
+                    value={searchTerm}
+                    onChange={handleTenantInputChange}
+                    onFocus={handleTenantInputFocus}
+                    placeholder="Search tenant"
+                    disabled={tenantsLoading || submitting}
+                    autoComplete="off"
+                  />
+                  {tenantsLoading && <div className="combobox-loading">Loading...</div>}
+                  {isOpen && !tenantsLoading && tenants.length > 0 && (
+                    <ul className="combobox-dropdown">
+                      {tenants.map((tenant) => (
+                        <li
+                          key={tenant.tenant_id}
+                          className={`combobox-option ${selectedTenant?.tenant_id === tenant.tenant_id ? 'selected' : ''}`}
+                          onClick={() => handleTenantOptionClick(tenant)}
+                        >
+                          {tenant.full_name}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {isOpen && !tenantsLoading && tenants.length === 0 && searchTerm && (
+                    <div className="combobox-no-results">No tenants found</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="shortcut-modal__field-row">
+                <label htmlFor="otc-room">Room Number:</label>
                 <input
-                  id="otc-tenant"
-                  className={`shortcut-modal__input ${error.field === 'tenant' ? 'error' : ''}`}
+                  id="otc-room"
+                  className={`shortcut-modal__input ${error.field === 'roomNumber' ? 'error' : ''}`}
                   type="text"
-                  value={searchTerm}
-                  onChange={handleTenantInputChange}
-                  onFocus={handleTenantInputFocus}
-                  placeholder="Search tenant"
-                  disabled={tenantsLoading || submitting}
-                  autoComplete="off"
+                  value={form.roomNumber}
+                  readOnly
+                  disabled={submitting}
                 />
-                {tenantsLoading && (
-                  <div className="combobox-loading">Loading...</div>
-                )}
-                {isOpen && !tenantsLoading && tenants.length > 0 && (
-                  <ul className="combobox-dropdown">
-                    {tenants.map((tenant) => (
-                      <li
-                        key={tenant.tenant_id}
-                        className={`combobox-option ${selectedTenant?.tenant_id === tenant.tenant_id ? 'selected' : ''}`}
-                        onClick={() => handleTenantOptionClick(tenant)}
-                      >
-                        {tenant.full_name}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {isOpen && !tenantsLoading && tenants.length === 0 && searchTerm && (
-                  <div className="combobox-no-results">
-                    No tenants found
-                  </div>
-                )}
+              </div>
+
+              <div className="shortcut-modal__field-row">
+                <label htmlFor="otc-amount">Amount to Pay:</label>
+                <input
+                  id="otc-amount"
+                  className={`shortcut-modal__input ${error.field === 'amount' ? 'error' : ''}`}
+                  type="number"
+                  value={form.amount}
+                  onChange={handleChange}
+                  disabled={submitting}
+                  placeholder="Enter amount"
+                />
+              </div>
+
+              <div className="shortcut-modal__field-row">
+                <label htmlFor="otc-date">Payment Date:</label>
+                <input
+                  id="otc-date"
+                  className={`shortcut-modal__input ${error.field === 'paymentDate' ? 'error' : ''}`}
+                  type="date"
+                  value={form.paymentDate}
+                  onChange={handleChange}
+                  disabled={submitting}
+                />
               </div>
             </div>
 
-            <div className="shortcut-modal__field-row">
-              <label htmlFor="otc-room">Room Number:</label>
-              <input
-                id="otc-room"
-                className={`shortcut-modal__input ${error.field === 'roomNumber' ? 'error' : ''}`}
-                type="text"
-                value={form.roomNumber}
-                readOnly
-                disabled={submitting}
-                
-              />
+            <div className="shortcut-modal__actions">
+              <button type="button" className="shortcut-modal__btn shortcut-modal__btn--cancel" onClick={handleClose} disabled={submitting}>
+                Cancel
+              </button>
+              <button type="submit" className="shortcut-modal__btn shortcut-modal__btn--success" disabled={submitting || tenantsLoading}>
+                {submitting ? 'Submitting...' : 'Submit'}
+              </button>
             </div>
-
-            <div className="shortcut-modal__field-row">
-              <label htmlFor="otc-amount">Amount to Pay:</label>
-              <input
-                id="otc-amount"
-                className={`shortcut-modal__input ${error.field === 'amount' ? 'error' : ''}`}
-                type="number"
-                value={form.amount}
-                onChange={handleChange}
-                disabled={submitting}
-                placeholder="Enter amount"
-              />
-            </div>
-
-            <div className="shortcut-modal__field-row">
-              <label htmlFor="otc-date">Payment Date:</label>
-              <input
-                id="otc-date"
-                className={`shortcut-modal__input ${error.field === 'paymentDate' ? 'error' : ''}`}
-                type="date"
-                value={form.paymentDate}
-                onChange={handleChange}
-                disabled={submitting}
-              />
-            </div>
-          </div>
-
-          <div className="shortcut-modal__actions">
-            <button type="button" className="shortcut-modal__btn shortcut-modal__btn--cancel" onClick={handleClose} disabled={submitting}>
-              Cancel
-            </button>
-            <button type="submit" className="shortcut-modal__btn shortcut-modal__btn--success" disabled={submitting || tenantsLoading}>
-              {submitting ? 'Submitting...' : 'Submit'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </Modal>
+          </form>
+        </div>
+      </Modal>
+      <ViewModal
+        open={Boolean(feedbackMessage)}
+        message={feedbackMessage}
+        showSpinner={false}
+        onClose={() => setFeedbackMessage('')}
+        duration={2000}
+      />
+    </>
   );
 }
