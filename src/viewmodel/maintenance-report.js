@@ -1,5 +1,5 @@
 import { supabaseRead } from '../model/supabaseclient.js';
-import { useSupabaseQuery } from './useSupabaseQuery.js';
+import { useSupabaseQuery } from 'viewmodel/useSupabaseQuery.js';
 
 const MAINTENANCE_REPORT_TABLE = 'maintenance_report';
 
