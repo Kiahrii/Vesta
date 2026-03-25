@@ -85,7 +85,7 @@ export default function NavGroup(props) {
   return (
     <Fragment>
       <li className="pc-item pc-caption" key={item.id}>
-        <label>{item.title}</label>
+        <label style={{ color: 'white' }}>{item.title}</label>
       </li>
       {navCollapse}
     </Fragment>
