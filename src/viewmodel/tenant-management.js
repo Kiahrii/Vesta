@@ -34,6 +34,19 @@ const formatDisplayDate = (value) => {
   return dateFormatter.format(parsedDate);
 };
 
+const formatLeaseDate = (value) => {
+  if (!value) {
+    return 'Not set';
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return 'Not set';
+  }
+
+  return dateFormatter.format(parsedDate);
+};
+
 const toDateInputValue = (value) => {
   const normalized = normalizeString(value) || toFieldValue(value);
   if (!normalized) {
@@ -96,6 +109,8 @@ const buildTenantRow = (tenant, user) => {
     room: tenant.assigned_room || 'N/A',
     contact: tenant.contact_no || 'N/A',
     moveIn: formatDisplayDate(tenant.move_in_date),
+    leaseStart: formatLeaseDate(tenant.lease_start),
+    leaseEnd: formatLeaseDate(tenant.lease_end),
     moveOut: tenant.move_out_date ? formatDisplayDate(tenant.move_out_date) : 'N/A',
     emergencyContact: tenant.emergency_contact || 'N/A',
     emergencyNo: tenant.emergency_contact_no || 'N/A',
@@ -156,7 +171,7 @@ export function useTenantManagement() {
       const { data: tenantData, error: tenantError } = await supabaseAdminRead
         .from(TENANTS_TABLE)
         .select(
-          'tenant_id, user_id, assigned_room, contact_no, move_in_date, move_out_date, emergency_contact, emergency_contact_no, profile_photo, status'
+          'tenant_id, user_id, assigned_room, contact_no, move_in_date, lease_start, lease_end, move_out_date, emergency_contact, emergency_contact_no, profile_photo, status'
         )
         .order('tenant_id', { ascending: true });
 

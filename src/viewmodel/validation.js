@@ -51,15 +51,26 @@ export const validateRegisterTenant = (form) => {
   }
 
   // Move In Date validation
+  let moveInDate = null;
   if (!form.move_in) {
     errors.move_in = 'Move-in date is required';
   } else {
-    const moveInDate = new Date(form.move_in);
+    moveInDate = new Date(form.move_in);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
     if (moveInDate < today) {
       errors.move_in = 'Move-in date cannot be in the past';
+    }
+  }
+
+  // Lease End validation (optional)
+  if (form.lease_end) {
+    const leaseEndDate = new Date(form.lease_end);
+    if (Number.isNaN(leaseEndDate.getTime())) {
+      errors.lease_end = 'Lease end date is invalid';
+    } else if (moveInDate && leaseEndDate < moveInDate) {
+      errors.lease_end = 'Lease end date cannot be earlier than lease start';
     }
   }
 

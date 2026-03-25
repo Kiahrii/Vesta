@@ -25,6 +25,20 @@ const toISODate = (value) => {
   return parsed.toISOString().slice(0, 10);
 };
 
+const toOptionalISODate = (value, errorMessage) => {
+  const normalized = normalizeString(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(errorMessage || 'Date is invalid.');
+  }
+
+  return parsed.toISOString().slice(0, 10);
+};
+
 const validateRegisterTenantPayload = (payload = {}) => {
   const firstName = normalizeString(payload.first_name);
   const middleName = normalizeString(payload.middle_name);
@@ -35,6 +49,7 @@ const validateRegisterTenantPayload = (payload = {}) => {
   const emergencyContact = normalizeString(payload.emergency_contact ?? payload.contact_name);
   const emergencyContactNo = toDigitsOnly(payload.emergency_contact_no ?? payload.em_contact_no);
   const moveInDate = toISODate(payload.move_in_date ?? payload.move_in);
+  const leaseEndDate = toOptionalISODate(payload.lease_end, 'Lease end date is invalid.');
   const roomId = Number(payload.room_id);
 
   if (!firstName) {
@@ -91,6 +106,14 @@ const validateRegisterTenantPayload = (payload = {}) => {
     throw new Error('Please select a valid room.');
   }
 
+  if (leaseEndDate) {
+    const leaseStartValue = new Date(moveInDate);
+    const leaseEndValue = new Date(leaseEndDate);
+    if (leaseEndValue < leaseStartValue) {
+      throw new Error('Lease end date cannot be earlier than lease start.');
+    }
+  }
+
   return {
     firstName,
     middleName: middleName || null,
@@ -101,6 +124,8 @@ const validateRegisterTenantPayload = (payload = {}) => {
     emergencyContact,
     emergencyContactNo,
     moveInDate,
+    leaseStartDate: moveInDate,
+    leaseEndDate,
     roomId
   };
 };
@@ -157,6 +182,8 @@ export async function registerTenant(payload) {
     emergencyContact,
     emergencyContactNo,
     moveInDate,
+    leaseStartDate,
+    leaseEndDate,
     roomId
   } = validateRegisterTenantPayload(payload);
 
@@ -189,7 +216,7 @@ export async function registerTenant(payload) {
 
   const userRecord = {
     user_id: userId,
-    user_role: TENANT_ROLE,
+    user_role: tenant,
     first_name: firstName,
     middle_name: middleName,
     last_name: lastName,
@@ -208,6 +235,8 @@ export async function registerTenant(payload) {
     emergency_contact: emergencyContact,
     emergency_contact_no: emergencyContactNo,
     move_in_date: moveInDate,
+    lease_start: leaseStartDate,
+    lease_end: leaseEndDate,
     assigned_room: roomData.room_no,
     room_id: roomId
   };
@@ -348,4 +377,3 @@ const billingYear = now.getFullYear();
     needsEmailConfirmation: !authData.session
   };
 }
-

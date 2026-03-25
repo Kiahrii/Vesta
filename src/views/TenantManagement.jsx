@@ -182,24 +182,24 @@ export default function TenantManagement() {
                         </div>
                         <div className="tenant-info">
                           <span>
-                            <b>Contact: </b>
+                            <b>Contact No: </b>
                           </span>
                           <br></br>
                           {tenant.contact}
                         </div>
                         <div className="tenant-info">
                           <span>
-                            <b>Move-in: </b>
+                            <b>Lease Start: </b>
                           </span>
                           <br></br>
-                          {tenant.moveIn}
+                          {tenant.leaseStart}
                         </div>
                         <div className="tenant-info">
                           <span>
-                            <b>Move-out: </b>
+                            <b>Lease End: </b>
                           </span>
                           <br></br>
-                          {tenant.moveOut}
+                          {tenant.leaseEnd}
                         </div>
                         <div className="tenant-info">
                           <span>

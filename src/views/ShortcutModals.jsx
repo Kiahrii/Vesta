@@ -46,6 +46,7 @@ export function RegisterTenantModal({ open, onClose }) {
     contact_name: '',
     em_contact_no: '',
     move_in: getTodayDate(),
+    lease_end: '',
     room_id: '',
     email: '',
     password: ''
@@ -136,7 +137,9 @@ export function RegisterTenantModal({ open, onClose }) {
         ...form,
         emergency_contact: form.contact_name,
         emergency_contact_no: form.em_contact_no,
-        move_in_date: form.move_in
+        move_in_date: form.move_in,
+        lease_start: form.move_in,
+        lease_end: form.lease_end
       });
 
       alert(
@@ -166,6 +169,7 @@ export function RegisterTenantModal({ open, onClose }) {
       contact_name: '',
       em_contact_no: '',
       move_in: getTodayDate(),
+      lease_end: '',
       room_id: '',
       email: '',
       password: ''
@@ -263,6 +267,15 @@ export function RegisterTenantModal({ open, onClose }) {
                     </option>
                   ))}
               </select>
+                
+              <h5 className="shortcut-modal__subtitle">Lease End Date</h5>
+              <input
+                className={`shortcut-modal__input ${error.field === 'lease_end' ? 'error' : ''}`}
+                type="date"
+                name="lease_end"
+                value={form.lease_end}
+                onChange={handleChange}
+              />
             </div>
 
             <div className="shortcut-modal__section">
