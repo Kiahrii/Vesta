@@ -9,7 +9,7 @@ import apartment_door from 'assets/images/apartment_door.jpg';
 import { MagnifyingGlass, Funnel, Plus, Door, NotePencil } from 'phosphor-react';
 import { AddRoomModal, UpdateRoomModal } from 'views/ShortcutModals.jsx';
 import MainCard from 'components/MainCard';
-import { getRooms, getRoomTenants } from 'viewmodel/addroom.js';
+import { useRoomsWithTenants } from 'viewmodel/addroom.js';
 import 'assets/scss/apartment-page/roomManagement.scss';
 import 'assets/scss/themes/components/_table.scss';
 
@@ -31,50 +31,27 @@ export default function RoomManagementPage() {
   const [addRoomOpen, setAddRoomOpen] = useState(false);
   const [viewRoomOpen, setViewRoomOpen] = useState(false);
   const [editRoomOpen, setEditRoomOpen] = useState(false);
-  const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState('');
   const [searchValue, setSearchValue] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-
-  const fetchRoomDetails = async () => {
-    setLoading(true);
-    setFetchError('');
-
-    try {
-      const loadedRooms = await getRooms();
-      const tenantRows = await getRoomTenants(loadedRooms);
-      const tenantsByRoomId = tenantRows.reduce((accumulator, tenant) => {
-        if (!accumulator[tenant.room_id]) {
-          accumulator[tenant.room_id] = [];
-        }
-        accumulator[tenant.room_id].push(tenant.full_name);
-        return accumulator;
-      }, {});
-
-      const normalizedRooms = loadedRooms.map((room) => ({
-        ...room,
-        tenants: tenantsByRoomId[room.room_id] ?? []
-      }));
-
-      setRooms(normalizedRooms);
-
-      if (selectedRoom?.room_id) {
-        const updatedRoom = normalizedRooms.find((room) => room.room_id === selectedRoom.room_id) ?? null;
-        setSelectedRoom(updatedRoom);
-      }
-    } catch (error) {
-      setFetchError(error.message || 'Failed to load room details.');
-      setRooms([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    data: rooms,
+    loading,
+    error: fetchError,
+    refetch: refreshRooms
+  } = useRoomsWithTenants();
 
   useEffect(() => {
-    fetchRoomDetails();
-  }, []);
+    if (loading) {
+      return;
+    }
+    if (!selectedRoom?.room_id) {
+      return;
+    }
+
+    const updatedRoom = rooms.find((room) => room.room_id === selectedRoom.room_id) ?? null;
+    setSelectedRoom(updatedRoom);
+  }, [loading, rooms, selectedRoom?.room_id]);
 
   const filteredRooms = useMemo(() => {
     return rooms.filter((room) => {
@@ -136,7 +113,7 @@ export default function RoomManagementPage() {
   }, [selectedRoom]);
 
   const handleSaved = async () => {
-    await fetchRoomDetails();
+    await refreshRooms();
   };
 
   return (

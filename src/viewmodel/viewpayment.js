@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
-import { supabase } from '../model/supabaseclient.js';
+import { supabaseRead } from '../model/supabaseclient.js';
+import { useSupabaseQuery } from './useSupabaseQuery.js';
 
 const STATUS_DISPLAY = {
   BILLING: 'Billing',
@@ -519,7 +520,7 @@ export async function createInitialBillingForTenant({ tenantId, billingMonth, am
     throw new Error('Billing month is required.');
   }
 
-  const { data: existingRows, error: existingError } = await supabase
+  const { data: existingRows, error: existingError } = await supabaseRead
     .from('payments')
     .select('payment_id')
     .eq('tenant_id', parsedTenantId)
@@ -537,7 +538,7 @@ export async function createInitialBillingForTenant({ tenantId, billingMonth, am
     };
   }
 
-  const { data: tenantRow, error: tenantError } = await supabase
+  const { data: tenantRow, error: tenantError } = await supabaseRead
     .from('tenants')
     .select('tenant_id, room_id')
     .eq('tenant_id', parsedTenantId)
@@ -550,7 +551,7 @@ export async function createInitialBillingForTenant({ tenantId, billingMonth, am
     throw new Error('Tenant room information is missing. Cannot create billing.');
   }
 
-  const { data: roomRow, error: roomError } = await supabase
+  const { data: roomRow, error: roomError } = await supabaseRead
     .from('rooms')
     .select('room_id, monthly_rent')
     .eq('room_id', tenantRow.room_id)
@@ -578,7 +579,7 @@ export async function createInitialBillingForTenant({ tenantId, billingMonth, am
     receipt_proof: null
   };
 
-  const { data: insertedRow, error: insertError } = await supabase.from('payments').insert(payload).select('*').single();
+  const { data: insertedRow, error: insertError } = await supabaseRead.from('payments').insert(payload).select('*').single();
 
   if (insertError) {
     throw new Error(`Failed to create initial billing record: ${insertError.message}`);
@@ -610,7 +611,7 @@ export async function submitTenantUploadedPayment({
     throw new Error('Billing month is required.');
   }
 
-  const { data: paymentRow, error: paymentError } = await supabase
+  const { data: paymentRow, error: paymentError } = await supabaseRead
     .from('payments')
     .select('*')
     .eq('tenant_id', parsedTenantId)
@@ -638,7 +639,7 @@ export async function submitTenantUploadedPayment({
     notes: normalizeString(notes) || null
   };
 
-  const { data: updatedRow, error: updateError } = await supabase
+  const { data: updatedRow, error: updateError } = await supabaseRead
     .from('payments')
     .update(payload)
     .eq('payment_id', paymentRow.payment_id)
@@ -653,69 +654,55 @@ export async function submitTenantUploadedPayment({
 }
 
 export function usePayments() {
-  const [payments, setPayments] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [actionPaymentId, setActionPaymentId] = useState(null);
 
   const fetchPayments = useCallback(async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const { data: paymentRows, error: paymentError } = await supabase
-        .from('payments')
-        .select(
-          `
-          *,
-          tenants (
-            tenant_id,
-            user_id,
-            move_in_date,
-            assigned_room,
-            room_id,
-            users (
-              user_id,
-              first_name,
-              middle_name,
-              last_name
-            ),
-            rooms (
-              room_id,
-              room_no,
-              monthly_rent
-            )
-          )
+    const { data: paymentRows, error: paymentError } = await supabaseRead
+      .from('payments')
+      .select(
         `
+        *,
+        tenants (
+          tenant_id,
+          user_id,
+          move_in_date,
+          assigned_room,
+          room_id,
+          users (
+            user_id,
+            first_name,
+            middle_name,
+            last_name
+          ),
+          rooms (
+            room_id,
+            room_no,
+            monthly_rent
+          )
         )
-        .order('payment_id', { ascending: false });
+      `
+      )
+      .order('payment_id', { ascending: false });
 
-      if (paymentError) {
-        throw new Error(`Failed to fetch payments: ${paymentError.message}`);
-      }
-
-      console.log('[payments] raw payments', paymentRows);
-
-      const enrichedRows = enrichPaymentRows({
-        paymentRows
-      });
-
-      console.log('[payments] enriched payments', enrichedRows);
-
-      setPayments(enrichedRows);
-      return enrichedRows;
-    } catch (fetchError) {
-      setPayments([]);
-      setError(fetchError.message || 'Unable to load payments.');
-      return [];
-    } finally {
-      setLoading(false);
+    if (paymentError) {
+      throw new Error(`Failed to fetch payments: ${paymentError.message}`);
     }
+
+    return enrichPaymentRows({
+      paymentRows
+    });
   }, []);
 
-  useEffect(() => {
-    fetchPayments();
-  }, [fetchPayments]);
+  const {
+    data: payments,
+    loading,
+    error,
+    refetch: refreshPayments
+  } = useSupabaseQuery(fetchPayments, {
+    initialData: [],
+    deps: [fetchPayments],
+    errorMessage: 'Unable to load payments.'
+  });
 
   const allPayments = useMemo(() => payments, [payments]);
 
@@ -814,8 +801,6 @@ export function usePayments() {
       }
 
       setActionPaymentId(parsedPaymentId);
-      setError('');
-
       try {
         const nextPayload = { ...payload };
         if (Object.prototype.hasOwnProperty.call(nextPayload, 'status')) {
@@ -827,18 +812,18 @@ export function usePayments() {
           }
         }
 
-        const { error: updateError } = await supabase.from('payments').update(nextPayload).eq('payment_id', parsedPaymentId);
+        const { error: updateError } = await supabaseRead.from('payments').update(nextPayload).eq('payment_id', parsedPaymentId);
 
         if (updateError) {
           throw new Error(`Failed to update payment: ${updateError.message}`);
         }
 
-        await fetchPayments();
+        await refreshPayments();
       } finally {
         setActionPaymentId(null);
       }
     },
-    [fetchPayments]
+    [refreshPayments]
   );
 
   const processPayment = useCallback(
@@ -916,12 +901,12 @@ export function usePayments() {
     allPayments,
     tenantPayments,
     pendingValidationPayments,
-    refreshPayments: fetchPayments,
     updatePayment,
     processPayment,
     approvePayment,
     rejectPayment,
     getTenantLedger,
-    getTenantSummary
+    getTenantSummary,
+    refreshPayments
   };
 }

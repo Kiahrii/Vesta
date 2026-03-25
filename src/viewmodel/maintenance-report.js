@@ -1,4 +1,5 @@
-import { supabase } from '../model/supabaseclient.js';
+import { supabaseRead } from '../model/supabaseclient.js';
+import { useSupabaseQuery } from './useSupabaseQuery.js';
 
 const MAINTENANCE_REPORT_TABLE = 'maintenance_report';
 
@@ -62,7 +63,7 @@ const toRoomLabel = (tenantRecord, roomRecord) => {
 const pickJoinedRow = (value) => (Array.isArray(value) ? value[0] ?? null : value ?? null);
 
 export async function getMaintenanceReports() {
-  const { data: reportRows, error: reportError } = await supabase
+  const { data: reportRows, error: reportError } = await supabaseRead
     .from(MAINTENANCE_REPORT_TABLE)
     .select(
       `
@@ -102,8 +103,6 @@ export async function getMaintenanceReports() {
     throw new Error(`Failed to load maintenance reports: ${reportError.message}`);
   }
 
-  console.log('[maintenance] raw reports', reportRows);
-
   const reports = reportRows || [];
   if (reports.length === 0) {
     return [];
@@ -130,9 +129,15 @@ export async function getMaintenanceReports() {
     };
   });
 
-  console.log('[maintenance] mapped reports', mappedReports);
-
   return mappedReports;
+}
+
+export function useMaintenanceReports() {
+  return useSupabaseQuery(getMaintenanceReports, {
+    initialData: [],
+    deps: [],
+    errorMessage: 'Failed to load maintenance reports.'
+  });
 }
 
 export async function updateMaintenanceReportStatus(reportId, status) {
@@ -154,7 +159,7 @@ export async function updateMaintenanceReportStatus(reportId, status) {
     updateData.resolved_at = new Date().toISOString();
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRead
     .from(MAINTENANCE_REPORT_TABLE)
     .update(updateData)
     .eq('report_id', parsedReportId)

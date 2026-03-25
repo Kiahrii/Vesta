@@ -1,5 +1,7 @@
+import { useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { supabase } from '../model/supabaseclient.js';
+import { supabase, supabaseRead } from '../model/supabaseclient.js';
+import { useSupabaseQuery } from './useSupabaseQuery.js';
 
 const MAX_ROOM_NO_LENGTH = 10;
 const MAX_RENT = 1000000;
@@ -13,6 +15,7 @@ const supabaseAdminWrite = createClient(import.meta.env.VITE_SUPABASE_URL, impor
   }
 });
 const roomWriteClient = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY ? supabaseAdminWrite : supabase;
+const roomReadClient = supabaseRead;
 
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
 const normalizeStatus = (value) => normalizeString(value).toLowerCase();
@@ -24,6 +27,7 @@ const normalizeFileExtension = (fileName = '') => {
 
 const normalizeForPath = (value = '') => normalizeString(value).toLowerCase().replace(/[^a-z0-9_-]/g, '');
 const isTenantActive = (tenant) => !tenant.move_out_date && !normalizeStatus(tenant.status).includes('moved');
+const pickJoinedRow = (value) => (Array.isArray(value) ? value[0] ?? null : value ?? null);
 
 const toRoomResolutionMaps = (rooms = []) => {
   const roomIds = [];
@@ -118,7 +122,7 @@ const validateAddRoomPayload = (payload = {}) => {
 };
 
 export async function getRooms() {
-  const { data, error } = await supabase
+  const { data, error } = await roomReadClient
     .from('rooms')
     .select('room_id, room_no, room_capacity, monthly_rent, occupancy_status, photo')
     .order('room_no', { ascending: true });
@@ -154,9 +158,24 @@ export async function getRoomTenants(roomsOrRoomIds = []) {
       .filter(Boolean)
   );
 
-  const { data: tenantData, error: tenantError } = await supabase
+  const { data: tenantData, error: tenantError } = await roomReadClient
     .from('tenants')
-    .select('tenant_id, room_id, assigned_room, user_id, emergency_contact, move_out_date, status');
+    .select(
+      `
+      tenant_id,
+      room_id,
+      assigned_room,
+      user_id,
+      emergency_contact,
+      move_out_date,
+      status,
+      users (
+        user_id,
+        first_name,
+        last_name
+      )
+    `
+    );
 
   if (tenantError) {
     throw new Error(`Failed to load room tenants: ${tenantError.message}`);
@@ -181,20 +200,8 @@ export async function getRoomTenants(roomsOrRoomIds = []) {
       })
       .filter(Boolean) ?? [];
 
-  const userIds = [...new Set(activeTenants.map((tenant) => tenant.user_id).filter(Boolean))];
-
-  let userNameById = new Map();
-  if (userIds.length > 0) {
-    const { data: usersData, error: usersError } = await supabase
-      .from('users')
-      .select('user_id, first_name, last_name')
-      .in('user_id', userIds);
-
-    if (usersError) {
-      throw new Error(`Failed to load tenant names: ${usersError.message}`);
-    }
-    userNameById = toTenantNameMap(usersData);
-  }
+  const joinedUsers = (tenantData ?? []).map((tenant) => pickJoinedRow(tenant?.users)).filter(Boolean);
+  const userNameById = toTenantNameMap(joinedUsers);
 
   return activeTenants.map((tenant) => {
     const fullName = buildTenantDisplayName(tenant, userNameById);
@@ -207,15 +214,55 @@ export async function getRoomTenants(roomsOrRoomIds = []) {
   });
 }
 
+export function useRoomsWithTenants() {
+  const fetchRoomsWithTenants = useCallback(async () => {
+    const loadedRooms = await getRooms();
+    const tenantRows = await getRoomTenants(loadedRooms);
+    const tenantsByRoomId = tenantRows.reduce((accumulator, tenant) => {
+      if (!accumulator[tenant.room_id]) {
+        accumulator[tenant.room_id] = [];
+      }
+      accumulator[tenant.room_id].push(tenant.full_name);
+      return accumulator;
+    }, {});
+
+    return loadedRooms.map((room) => ({
+      ...room,
+      tenants: tenantsByRoomId[room.room_id] ?? []
+    }));
+  }, []);
+
+  return useSupabaseQuery(fetchRoomsWithTenants, {
+    initialData: [],
+    deps: [fetchRoomsWithTenants],
+    errorMessage: 'Failed to load room details.'
+  });
+}
+
 export async function getRoomTenantAssignments(roomId, roomNo = '') {
   const numericRoomId = Number(roomId);
   if (!Number.isInteger(numericRoomId) || numericRoomId <= 0) {
     throw new Error('Invalid room id.');
   }
 
-  const { data: tenantData, error: tenantError } = await supabase
+  const { data: tenantData, error: tenantError } = await roomReadClient
     .from('tenants')
-    .select('tenant_id, room_id, assigned_room, user_id, emergency_contact, move_out_date, status')
+    .select(
+      `
+      tenant_id,
+      room_id,
+      assigned_room,
+      user_id,
+      emergency_contact,
+      move_out_date,
+      status,
+      users (
+        user_id,
+        first_name,
+        last_name
+      )
+    `
+    )
     .order('tenant_id', { ascending: true });
 
   if (tenantError) {
@@ -236,21 +283,8 @@ export async function getRoomTenantAssignments(roomId, roomNo = '') {
     const tenantAssignedRoom = normalizeString(tenant.assigned_room).toLowerCase();
     return Boolean(normalizedRoomNo) && tenantAssignedRoom === normalizedRoomNo;
   });
-  const userIds = [...new Set(activeTenants.map((tenant) => tenant.user_id).filter(Boolean))];
-
-  let userNameById = new Map();
-  if (userIds.length > 0) {
-    const { data: usersData, error: usersError } = await supabase
-      .from('users')
-      .select('user_id, first_name, last_name')
-      .in('user_id', userIds);
-
-    if (usersError) {
-      throw new Error(`Failed to load tenant names: ${usersError.message}`);
-    }
-
-    userNameById = toTenantNameMap(usersData);
-  }
+  const joinedUsers = (tenantData ?? []).map((tenant) => pickJoinedRow(tenant?.users)).filter(Boolean);
+  const userNameById = toTenantNameMap(joinedUsers);
 
   return activeTenants.map((tenant) => ({
     tenant_id: tenant.tenant_id,
@@ -265,9 +299,24 @@ export async function getTenantCandidates(roomId, roomNo = '') {
     throw new Error('Invalid room id.');
   }
 
-  const { data: tenantData, error: tenantError } = await supabase
+  const { data: tenantData, error: tenantError } = await roomReadClient
     .from('tenants')
-    .select('tenant_id, room_id, assigned_room, user_id, emergency_contact, move_out_date, status')
+    .select(
+      `
+      tenant_id,
+      room_id,
+      assigned_room,
+      user_id,
+      emergency_contact,
+      move_out_date,
+      status,
+      users (
+        user_id,
+        first_name,
+        last_name
+      )
+    `
+    )
     .order('tenant_id', { ascending: true });
 
   if (tenantError) {
@@ -295,21 +344,8 @@ export async function getTenantCandidates(roomId, roomNo = '') {
       return !isAssignedToAnyRoom;
     }) ?? [];
 
-  const userIds = [...new Set(candidates.map((tenant) => tenant.user_id).filter(Boolean))];
-
-  let userNameById = new Map();
-  if (userIds.length > 0) {
-    const { data: usersData, error: usersError } = await supabase
-      .from('users')
-      .select('user_id, first_name, last_name')
-      .in('user_id', userIds);
-
-    if (usersError) {
-      throw new Error(`Failed to load tenant names: ${usersError.message}`);
-    }
-
-    userNameById = toTenantNameMap(usersData);
-  }
+  const joinedUsers = (tenantData ?? []).map((tenant) => pickJoinedRow(tenant?.users)).filter(Boolean);
+  const userNameById = toTenantNameMap(joinedUsers);
   return candidates
     .map((tenant) => ({
       tenant_id: tenant.tenant_id,
@@ -322,7 +358,7 @@ export async function getTenantCandidates(roomId, roomNo = '') {
 const syncRoomOccupancyStatus = async (roomId) => {
   const numericRoomId = Number(roomId);
 
-  const { data: tenantData, error: tenantError } = await supabase
+  const { data: tenantData, error: tenantError } = await roomReadClient
     .from('tenants')
     .select('tenant_id, move_out_date, status')
     .eq('room_id', numericRoomId);

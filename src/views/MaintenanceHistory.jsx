@@ -1,5 +1,5 @@
 // react-bootstrap
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
 
@@ -8,7 +8,7 @@ import { MagnifyingGlass, Funnel, Export } from 'phosphor-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import MainCard from 'components/MainCard';
-import { getMaintenanceReports, MAINTENANCE_STATUS, } from 'viewmodel/maintenance-report';
+import { MAINTENANCE_STATUS, useMaintenanceReports } from 'viewmodel/maintenance-report';
 import 'assets/scss/apartment-page/past-tenants.scss';
 import 'assets/scss/themes/components/_table.scss';
 
@@ -77,32 +77,11 @@ const getIssueLabel = (row) => row.issue || `Issue #${row.issue_id}`;
 // ==============================|| MAINTENANCE HISTORY PAGE ||============================== //
 
 export default function MaintenanceHistory() {
-  const [reports, setReports] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState('');
+  const { data: reports, loading, error: fetchError } = useMaintenanceReports();
   const [searchTerm, setSearchTerm] = useState('');
   const [issueFilter, setIssueFilter] = useState('all');
   const [monthFilter, setMonthFilter] = useState('all');
   const [yearFilter, setYearFilter] = useState('all');
-
-  const loadReports = async () => {
-    setLoading(true);
-    setFetchError('');
-
-    try {
-      const rows = await getMaintenanceReports();
-      setReports(rows);
-    } catch (error) {
-      setFetchError(error.message);
-      setReports([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadReports();
-  }, []);
 
 const archivedReports = useMemo(() => {
   return reports.filter((row) => {
