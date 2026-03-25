@@ -1,0 +1,164 @@
+.top-buttons {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: -25px;
+}
+
+.right-side {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.table {
+  margin-top: 25px;
+}
+
+
+/* Search Bar CSS */
+.search-content {
+    --padding: 14px;
+
+    width: max-content;
+    display: flex;
+    align-items: center;
+    padding: var(--padding);
+    border-radius: 28px;
+    border: 1px solid #495057;
+    height: 40px;
+    background: #f6f6f6;
+    transition: box-shadow 0.25s;
+}
+
+.search-input {
+    font-size: 16px;
+    font-family: 'Arial', sans-serif;
+    color: black;
+    margin-left: var(--padding);
+    outline: none;
+    border: none;
+    background: transparent;
+    width: 250px;
+}
+
+.search-icon {
+    color: gray
+}
+
+.search-input::placeholder {
+    color: rgba(0, 0, 0, 0.25);
+}
+
+.search-content:focus-within {
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.75);
+}
+
+/* Filter CSS */
+.status {
+    background: #f6f6f6;
+    border: 1px solid #495057;
+    border-radius: 10px;
+    width: 100px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    color: gray;
+    font-size: 16px;
+}
+
+.filter-icon {
+    color: gray;
+}
+
+.filter-status {
+    position: relative;
+    font-family: 'Arial', sans-serif;
+}
+
+.status {
+    background: #f6f6f6;
+    border: 1px solid #f6f6f6;
+    border-radius: 10px;
+    width: 100px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #495057;
+}
+
+.status-options {
+    display: none;
+    position: absolute;
+    top: 110%;
+    left: 0;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    min-width: 100px;
+    padding: 6px 0;
+    z-index: 10;
+}
+
+.status:hover {
+    background: #f6f6f6;
+}
+
+.filter-status:focus-within .status-options {
+    display: block;
+}
+
+.status-options a,
+.status-options button {
+    display: block;
+    padding: 2px 14px;
+    text-decoration: none;
+    color: #333;
+    background: transparent;
+    border: none;
+    width: 100%;
+    text-align: left;
+    font-family: 'Arial', sans-serif;
+    cursor: pointer;
+}
+
+.status-options a:hover,
+.status-options button:hover {
+    background-color: #f2f2f2;
+}
+
+/* BUTTONS */
+
+.export-btn {
+    background-color: #6DAC9E;
+    color: white;
+    font-family: 'Arial', sans-serif;
+    border-radius: 10px;
+    width: 150px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.export-btn:hover {
+    color: white;
+    box-shadow: #6DAC9E;
+}
+
+.act-btn3 {
+    display: flex;
+    justify-content: center;
+    gap: 7px;
+}

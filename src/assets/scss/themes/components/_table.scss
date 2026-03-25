@@ -1,0 +1,104 @@
+// ============================
+//   17. Table css start
+// ============================
+@use 'sass:color';
+
+// .table {
+//   &.table-align-center {
+//     td,
+//     th {
+//       vertical-align: middle;
+//     }
+//   }
+//   thead th {
+//     padding: 0.9rem 0.75rem;
+//     border-bottom: 1px solid #f1f1f1;
+//     font-size: 13px;
+//     color: #262626;
+//     background: rgba(244, 247, 250, 0.5);
+//     text-transform: uppercase;
+//   }
+//   td,
+//   th {
+//     border-top: 1px solid $border-color;
+//     border-bottom: none;
+//     white-space: nowrap;
+//     padding: 0.7rem 0.75rem;
+//     vertical-align: middle;
+//   }
+//   &.table-borderless {
+//     td,
+//     th {
+//       border: none !important;
+//     }
+//   }
+// }
+
+// .table-hover tbody tr:hover {
+//   background-color: #{color.adjust($primary, $alpha: -0.97)};
+// }
+
+/* Table CSS */
+
+* {
+    font-family: 'Cambria', sans-serif;
+}
+
+.table {
+    font-family: 'Cambria', sans-serif;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 900px;
+    border-radius: 5px 5px 0 0;
+    overflow: hidden;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+    color: black;
+}
+
+.table thead th {
+  color: white;
+}
+
+.table thead tr {
+    background-color: #4998c4;
+    color: #ffffff;
+    text-align: center;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.table th, 
+.table td {
+    padding: 12px 15px;
+}
+
+.table tbody tr {
+    border-bottom: 1px solid #dddddd;
+    text-align: center;
+    font-weight: normal;
+    color: black;
+}
+
+.table tbody tr:nth-of-type(even) {
+    background-color: #f3f3f3;
+}
+
+.table tr:last-of-type {
+    border-bottom: 2px solid #4998c4;
+}
+
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.table {
+    width: 100%;
+    min-width: 600px;
+    box-sizing: border-box;
+}
+
+// ============================
+//   17. Table css end
+// ============================

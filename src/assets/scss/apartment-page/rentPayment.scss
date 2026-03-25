@@ -1,0 +1,305 @@
+* {
+    font-family: "Cambria";
+}
+
+.attachment-link {
+    // color: black;
+    cursor: pointer;
+}
+
+.stat-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.top-buttons-rp {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 10px;
+}
+
+.right-side {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Search Bar CSS */
+.search-content {
+    --padding: 14px;
+
+    width: max-content;
+    display: flex;
+    align-items: center;
+    padding: var(--padding);
+    border-radius: 28px;
+    border: 1px solid #495057;
+    height: 40px;
+    background: #f6f6f6;
+    transition: box-shadow 0.25s;
+}
+
+.search-input {
+    font-size: 15px;
+    font-family: 'Arial', sans-serif;
+    color: black;
+    margin-left: var(--padding);
+    outline: none;
+    border: none;
+    background: transparent;
+    width: 250px;
+}
+
+.search-icon {
+    color: gray
+}
+
+.search-input::placeholder {
+    color: rgba(0, 0, 0, 0.25);
+}
+
+.search-content:focus-within {
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.75);
+}
+
+/* Filter CSS */
+.filter-icon {
+    color: #495057;
+}
+
+.filter-status {
+    position: relative;
+    font-family: 'Arial', sans-serif;
+}
+
+.filter-billing-month {
+    position: relative;
+    font-family: 'Arial', sans-serif;
+}
+
+.billing-month {
+    background: #f6f6f6;
+    border: 1px solid #495057;
+    border-radius: 10px;
+    width: 150px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #495057;
+}
+
+.month-options {
+    display: none;
+    position: absolute;
+    top: 110%;
+    left: 0;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    min-width: 150px;
+    padding: 6px 0;
+    z-index: 10;
+}
+
+.billing-month:hover {
+    background: #f1f1f1;
+}
+
+.filter-billing-month:focus-within .month-options {
+    display: block;
+}
+
+.month-options a {
+    display: block;
+    padding: 2px 14px;
+    text-decoration: none;
+    color: #333;
+}
+
+.month-options a:hover {
+    background-color: #f2f2f2;
+}
+
+.status {
+    background: #f6f6f6;
+    border: 1px solid #495057;
+    border-radius: 10px;
+    width: 100px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #495057;
+}
+
+.status-options {
+    display: none;
+    position: absolute;
+    top: 110%;
+    left: 0;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    min-width: 130px;
+    padding: 6px 0;
+    z-index: 10;
+}
+
+.status:hover {
+    background: #f1f1f1;
+}
+
+.filter-status:focus-within .status-options {
+    display: block;
+}
+
+.status-options a {
+    display: block;
+    padding: 2px 14px;
+    text-decoration: none;
+    color: #333;
+}
+
+.status-options a:hover {
+    background-color: #f2f2f2;
+}
+
+// CARD
+.rent-card {
+    width: 220px;
+    height: 120px;
+    border-radius:10px !important;
+}
+
+.stat-wrap {
+    padding-bottom: 20px;
+}
+
+/* More BUTTONS */
+
+.nav-pills .nav-link.active {
+  background-color: #4988c4;
+  color: #fff;
+}
+
+.nav-pills .nav-link {
+  color: #4988c4;
+}
+
+.nav-pills .nav-link:hover {
+  background-color: #3e72a3;
+  color: white;
+}
+
+
+.otc-btn {
+    border: none;
+    color: black;
+    border-radius: 10px;
+    padding: 10px;
+    background-color: #7AB2B2;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.otc-btn:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.75);
+}
+
+.all-payments-nav {
+    border: none;
+    background-color: #fff;
+}
+
+.act-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.act-btn2, .btn-holder {
+    display: flex;
+    justify-content: right;
+    gap: 5px;
+}
+
+.approve,
+.submit {
+    background-color: #A7CBA7;
+    color: black;
+    font-family: 'Arial', sans-serif;
+    border-radius: 10px;
+    padding: 5px 5px;
+}
+
+.reject,
+.cancel {
+    background-color: #F49C75;
+    color: black;
+    font-family: 'Arial', sans-serif;
+    border-radius: 10px;
+    padding: 5px 5px;
+}
+
+.left-align {
+    text-align: left;
+}
+
+// OTC PAYMENT MODAL
+
+.otc-header {
+    text-align: center;
+    margin-top: -15px;
+    border-bottom: 1px solid #5e5e5e;
+    padding-bottom: 3px;
+}
+
+.label-wrapper {
+    padding: 10px;
+}
+
+.label-input {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    font-family: 'Arial', sans-serif;
+    font-size: 20px;
+}
+
+.rent-detail-input {
+    width: 100%;
+    border: 1px solid;
+    border-radius: 10px;
+    padding: 5px;
+    font-size: 15px;
+    transition: box-shadow 0.25s, border-color 0.25s;
+    color: black;
+    text-align: center;
+}
+
+.rent-detail-input:focus {
+    outline: none;
+    border-color: #000000;
+    color: black;
+    text-align: left;
+    box-shadow: 0 0 0 2px rgba(73, 152, 196, 0.2);
+}
+
+label {
+    font-size: 15px;
+    display: flex;
+    text-align: right;
+    color: black;
+}

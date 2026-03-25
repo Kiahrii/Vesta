@@ -1,0 +1,55 @@
+.notification-unread {
+  font-weight: 600;
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+.notification-read {
+  font-weight: 400;
+}
+
+.notification-unread h5,
+.notification-unread p,
+.notification-unread span {
+  font-weight: 600;
+}
+
+.notification-read h5,
+.notification-read p,
+.notification-read span {
+  font-weight: 400;
+}
+
+.notification-item .card-body {
+  padding: 8px 16px;
+}
+
+.notification-item {
+  cursor: pointer;
+}
+
+.notification-item h5 {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.notification-item p {
+  font-size: 16px;
+}
+
+.notification-item .text-sm {
+  font-size: 16px;
+}
+
+.dropdown-notification.pc-h-dropdown .text-span {
+  font-size: 16px;
+}
+
+.notification-avatar {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+}
+
+.dropdown-notification.pc-h-dropdown .dropdown-body {
+  padding: 8px 16px;
+}

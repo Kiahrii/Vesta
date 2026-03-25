@@ -1,0 +1,463 @@
+* {
+    font-family: 'Cambria', sans-serif;
+}
+
+.top-buttons {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 10px;
+}
+
+.right-side {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Search Bar CSS */
+.search-content {
+    --padding: 14px;
+
+    width: max-content;
+    display: flex;
+    align-items: center;
+    padding: var(--padding);
+    border-radius: 28px;
+    border: 1px solid #495057;
+    height: 40px;
+    background: #f6f6f6;
+    transition: box-shadow 0.25s;
+}
+
+.search-input {
+    font-size: 15px;
+    font-family: 'Cambria', sans-serif;
+    color: black;
+    margin-left: var(--padding);
+    outline: none;
+    border: none;
+    background: transparent;
+    width: 250px;
+}
+
+.search-icon {
+    color: gray
+}
+
+.search-input::placeholder {
+    color: rgba(0, 0, 0, 0.25);
+}
+
+.search-content:focus-within {
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.75);
+}
+
+/* Filter CSS */
+.filter-icon {
+    color: #495057;
+}
+
+.filter-status {
+    position: relative;
+    font-family: 'Cambria', sans-serif;
+}
+
+.status {
+    background: #f6f6f6;
+    border: 1px solid #495057;
+    border-radius: 10px;
+    width: 100px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #495057;
+}
+
+.status-options {
+    display: none;
+    position: absolute;
+    top: 110%;
+    left: 0;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    min-width: 100px;
+    padding: 6px 0;
+    z-index: 10;
+}
+
+.status:hover {
+    background: #f1f1f1;
+}
+
+.filter-status:focus-within .status-options {
+    display: block;
+}
+
+.status-options a {
+    display: block;
+    padding: 2px 14px;
+    text-decoration: none;
+    color: #333;
+}
+
+.status-options a:hover {
+    background-color: #f2f2f2;
+}
+
+// BUTTONS
+
+.add-room-btn {
+    background-color: #088395;
+    color: white;
+    font-family: 'Cambria', sans-serif;
+    border-radius: 10px;
+    width: 150px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.add-room-btn:hover {
+    color: white;
+    box-shadow: 0 4px 8px #065d6a98;
+}
+
+.act-btn2 {
+    display: flex;
+    justify-content: right;
+    gap: 10px;
+}
+
+.cancel,
+.register-btn {
+    border-radius: 10px;
+    color: black;
+    padding: 5px;
+    border: none;
+}
+
+.cancel {
+    background-color: red;
+}
+
+.register-btn {
+    background-color: #A7CBA7;
+    color: rgb(0, 0, 0);
+}
+
+.cancel:hover {
+    background-color: rgb(234, 2, 2);
+}
+
+.register-btn:hover {
+    background-color: #A7CBA7;
+}
+
+.cancel:hover,
+.register-btn:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.75);
+}
+
+// FLIPPING CARD
+
+.tenant-card-wrapper {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 30px;
+    justify-items: center;
+    padding-top: 25px;
+}
+
+// Tablet
+@media (max-width: 992px) {
+  .tenant-card-wrapper {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+// Mobile
+@media (max-width: 576px) {
+  .tenant-card-wrapper {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* CARD CONTAINER - Perspective for 3D effect */
+.tenant-card {
+    perspective: 1200px;
+    position: relative;
+    z-index: 1;
+    transition: transform 0.3s ease;
+}
+
+/* CARD INNER - The flip container */
+.tenant-card-inner {
+    width: 250px;
+    height: 350px;
+    position: relative;
+    transform-style: preserve-3d;
+    cursor: pointer;
+    backface-visibility: hidden;
+    transform: translateZ(0) rotateY(0deg);
+    transition: transform 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+    will-change: transform;
+}
+
+/* Focus state */
+.tenant-card-inner:focus-visible {
+    outline: 2px solid #4988c4;
+    outline-offset: 4px;
+}
+
+/* Flipped state - Only affects THIS card */
+.tenant-card-inner.is-flipped {
+    transform: translateZ(0) rotateY(180deg);
+}
+
+/* Hover effect - only on unflipped cards */
+.tenant-card-inner:hover:not(.is-flipped) {
+    transform: translateZ(0) rotateY(0deg) scale(1.03);
+}
+
+/* Hover effect - on flipped cards */
+.tenant-card-inner.is-flipped:hover {
+    transform: translateZ(0) rotateY(180deg) scale(1.03);
+}
+
+/* Card wrapper hover effect */
+.tenant-card:hover {
+    transform: translateY(-5px);
+}
+
+.title-tenant {
+    text-align: center;
+    border-bottom: 1px solid #5e5e5e;
+    padding-bottom: 3px;
+    font-weight: bold;
+}
+
+.sub-title {
+    font-weight: bold;
+    margin: 5% 0 5% 0;
+}
+
+/* FRONT SIDE */
+.tenant-card-front {
+    position: absolute;
+    inset: 0;
+    background: #ffffff;
+    border-radius: 16px;
+    backface-visibility: hidden;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    z-index: 2;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+
+    h3 {
+        font-size: 22px;
+        font-weight: 600;
+    }
+
+    .tenant-p {
+        font-size: 14px;
+        color: #555;
+        text-align: center;
+    }
+}
+
+/* BACK SIDE */
+.tenant-card-back {
+    position: absolute;
+    inset: 0;
+    background: #bde8f5;
+    color: black;
+    border-radius: 16px;
+    backface-visibility: hidden;
+    transform: rotateY(180deg);
+    padding: 20px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    z-index: 1;
+
+    h4 {
+        margin-bottom: 10px;
+    }
+}
+
+/* Z-INDEX SWAP ON FLIP - Only affects THIS card */
+.tenant-card-inner.is-flipped .tenant-card-front {
+    z-index: 1;
+}
+
+.tenant-card-inner.is-flipped .tenant-card-back {
+    z-index: 2;
+}
+
+/* EDIT BUTTON */
+.tenant-card-edit {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.9);
+    color: #333;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    z-index: 3;
+    pointer-events: auto;
+}
+
+.tenant-card-edit:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+.tenant-info{
+  margin-bottom: 3%;
+}
+
+.front-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+
+    svg {
+        color: #4988c4;
+    }
+
+    span {
+        font-size: 20px;
+        font-weight: 600;
+    }
+}
+
+.tenant-profile-photo {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #4988c4;
+}
+
+.tenant-details {
+    .tenant-details {
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+
+    /* Individual info blocks */
+    .tenant-details p {
+        font-size: 13px;
+        line-height: 1.4;
+        margin-bottom: 8px;
+    }
+
+    .tenant-details b {
+        font-size: 14px;
+        color: #bbb;
+    }
+}
+
+.active {
+    color: #4caf50;
+    font-weight: 600;
+}
+
+.moved-out {
+    color: red;
+    font-weight: 600;
+}
+
+// MODAL CSS
+.register-container {
+    display: flex;
+    flex-direction: column;
+    margin-top: 10px;
+    gap: 15px;
+    font-family: 'Arial', sans-serif;
+}
+
+.register-grid {
+    display: grid;
+    gap: 12px;
+}
+
+label {
+    font-size: 14px;
+    color: #000;
+    text-align: left;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.register-field-input,
+.occupancySelect {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 18px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    text-align: left;
+    transition: box-shadow 0.25s, border-color 0.25s;
+}
+
+.register-field-input:focus,
+.occupancySelect:focus {
+    outline: none;
+    text-align: left;
+    border-color: #4988c4;
+    box-shadow: 0 0 0 2px rgba(73, 136, 196, 0.2);
+}
+
+.act-btn2 {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+// modal content scrollable
+.modal-content {
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 20px;
+    border-radius: 12px;
+}
+
+//----
+
+.required-asterisk {
+  color: red;
+  margin-left: 2px;
+}
+
+.input-error {
+  border-color: red !important;
+}
+
+.error {
+  color: red;
+  font-size: 12px;
+  margin-top: 4px;
+  margin-bottom: 0;
+}

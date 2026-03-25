@@ -1,0 +1,389 @@
+.top-buttons-rm {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 5px;
+}
+
+.right-side {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.title {
+    text-align: center;
+}
+
+.title1 {
+    text-align: center;
+    margin-top: -15px;
+    display: inline-block;
+    border-bottom: 1px solid #5e5e5e;
+    padding-bottom: 3px;
+}
+
+.description {
+    margin-top: -15px;
+    text-align: center;
+    display: inline-block;
+    border-bottom: 1px solid #5e5e5e;
+    padding-bottom: 3px;
+}
+
+/* Search Bar CSS */
+.search-content-rm {
+    --padding: 14px;
+
+    width: max-content;
+    display: flex;
+    align-items: center;
+    padding: var(--padding);
+    border-radius: 28px;
+    border: 1px solid #495057;
+    height: 40px;
+    background: #f6f6f6;
+    transition: box-shadow 0.25s;
+}
+
+.search-input-rm {
+    font-size: 15px;
+    font-family: 'Arial', sans-serif;
+    color: black;
+    margin-left: var(--padding);
+    outline: none;
+    border: none;
+    background: transparent;
+    width: 250px;
+}
+
+.search-ico-rm {
+    color: gray
+}
+
+.search-input-rm::placeholder {
+    color: rgba(0, 0, 0, 0.25);
+}
+
+.search-content-rm:focus-within {
+    box-shadow: 0 0 2px rgba(0, 0, 0, 0.75);
+}
+
+/* Filter CSS */
+.filter-icon {
+    color: #495057;
+}
+
+.filter-status {
+    position: relative;
+    font-family: 'Arial', sans-serif;
+}
+
+.filter-occupancy {
+    position: relative;
+    font-family: 'Arial', sans-serif;
+}
+
+.occupancy {
+    background: #f6f6f6;
+    border: 1px solid #495057;
+    border-radius: 10px;
+    width: 150px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #000000;
+}
+
+.occupancy-options {
+    display: none;
+    position: absolute;
+    top: 110%;
+    left: 0;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    min-width: 150px;
+    padding: 6px 0;
+    z-index: 10;
+}
+
+.occupancy:hover {
+    background: #f1f1f1;
+}
+
+.filter-occupancy:focus-within .occupancy-options {
+    display: block;
+}
+
+.occupancy-options a {
+    display: block;
+    padding: 2px 14px;
+    text-decoration: none;
+    color: #333;
+}
+
+.occupancy-options a:hover {
+    background-color: #f2f2f2;
+}
+
+// BUTTONS
+.add-room-btn {
+    background-color: #2E4566;
+    color: white;
+    font-family: 'Arial', sans-serif;
+    border-radius: 10px;
+    width: 150px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.add-room-btn:hover {
+    color: white;
+    box-shadow: 0 4px 8px #2E4566(0, 0, 0, 0.75);
+}
+
+.act-btn2 {
+    display: flex;
+    justify-content: right;
+    gap: 10px;
+}
+
+.cancel,
+.submit,
+.close,
+.edit,
+.save,
+.remove,
+.add-tenant-btn {
+    border-radius: 10px;
+    color: #6DAC9E;
+    padding: 12px;
+    border: none;
+}
+
+.cancel,
+.close,
+.remove {
+    background-color: #F16751;
+     color: rgb(0, 0, 0);
+}
+
+.submit,
+.edit,
+.add-tenant-btn {
+    background-color: #6DAC9E;
+    color: rgb(0, 0, 0);
+}
+
+.save {
+    background-color: #A7CBA7;
+}
+
+.save,
+.remove,
+.edit {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.cancel:hover {
+    background-color: rgb(234, 2, 2);
+}
+
+.submit:hover {
+    background-color: #407ab0;
+}
+
+.cancel:hover,
+.submit:hover,
+.close:hover,
+.edit:hover,
+.save:hover,
+.remove:hover,
+.room-card:hover,
+.add-tenant-btn:hover {
+    box-shadow: 0 4px 8px #F16751(0, 0, 0, 0.75);
+}
+
+// ROOM CARDS
+
+* {
+    margin: 0px;
+    padding: 0px;
+    box-sizing: border-box;
+    font-family: 'Arial', sans-serif;
+}
+
+.container,
+.row {
+    margin-top: 25px;
+}
+
+.room-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+    transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.room-card:hover {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.75);
+    transform: translateY(-2px);
+}
+
+.room-btn {
+    border-radius: 5px;
+    border: none;
+    color: black;
+    background-color: #4988c4;
+    padding: 5px;
+    width: 100%;
+    margin-top: 8px;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+}
+
+.room-btn:hover {
+    background-color: #5698d6;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.75);
+}
+
+// IMAGE
+.apartment_door {
+    width: 100%;
+    height: 300px;
+    border-radius: 10px;
+    object-fit: cover;
+}
+
+// MODAL IMAGE ATTACHMENT FIX
+.modal-container {
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.modal-content {
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.modal-image {
+    max-width: 100%;
+    max-height: 80vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
+}
+
+.modal-image-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    max-width: 100%;
+    max-height: 80vh;
+    overflow: hidden;
+}
+
+.modal-image-container img {
+    max-width: 100%;
+    max-height: 80vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+}
+
+// ADD ROOM MODAL
+.otc-container {
+    display: flex;
+    flex-direction: column;
+    margin-top: 5px;
+}
+
+.otc-field {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    font-family: 'Arial', sans-serif;
+    font-size: 18px;
+}
+
+label {
+    font-size: 16px;
+    display: center;
+    text-align: center;
+    color: black;
+}
+
+.otc-field-input {
+    width: 100%;
+    border: 1px solid;
+    border-radius: 10px;
+    padding: 5px;
+    font-size: 18px;
+    transition: box-shadow 0.25s, border-color 0.25s;
+    color: black;
+    text-align: center;
+}
+
+.otc-field-input:focus {
+    outline: none;
+    border-color: #000000;
+    color: black;
+    text-align: center;
+    box-shadow: 0 0 0 2px rgba(73, 152, 196, 0.2);
+}
+
+.occupancySelect {
+    border: 1px solid;
+    border-color: #000000;
+    border-radius: 10px;
+    color: black;
+    text-align: center;
+}
+
+.edit-room-field {
+    display: grid;
+    grid-template-columns: 100px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-family: 'Arial', sans-serif;
+    font-size: 16px;
+}
+
+.required-asterisk {
+  color: #F16751;
+  margin-left: 2px;
+}
+
+.input-error {
+  border-color: #F16751 !important;
+}
+
+.error {
+  color: #F16751;
+  font-size: 12px;
+  margin-top: 4px;
+  margin-bottom: 0;
+}

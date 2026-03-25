@@ -1,0 +1,50 @@
+
+
+// Custom button variants DASHBOARD
+.custom-btn-add,
+.custom-btn-register,
+.custom-btn-payment {
+  background: #088395;
+  border: none;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(67, 97, 238, 0.3);
+  
+  &:hover {
+    background: #076877;
+    box-shadow: 0 6px 20px rgba(67, 97, 238, 0.4);
+    color: white;
+  }
+  
+  i {
+    font-size: 1.2rem;
+    margin-right: 8px;
+  }
+}
+
+// Compact version for smaller screens
+@media (max-width: 768px) {
+  .custom-btn-add,
+  .custom-btn-register,
+  .custom-btn-payment {
+    padding: 10px 15px;
+    font-size: 0.9rem;
+    
+    i {
+      font-size: 1rem;
+      margin-right: 5px;
+    }
+  }
+}
+
+// Custom card background for charts
+.custom-bg {
+  background: linear-gradient(135deg, #088395, #7AB2B2);
+  border-radius: 16px;
+  padding: 20px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(67, 97, 238, 0.2);
+}
